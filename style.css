@@ -91,9 +91,14 @@ body {
 
 #formulaImg {
   display: block;
-  /* JS가 상황에 따라 width/height를 세팅함 */
+  width: auto;
+  height: auto;
+
+  /* 큰 이미지는 비율 유지하면서 화면 안으로 축소 */
   max-width: calc(100vw - (var(--pad) * 2));
   max-height: calc(100vh - var(--topbar-h) - 70px);
+
+  object-fit: contain; /* 혹시 width/height 지정되더라도 비율 유지 */
 }
 
 .filename {
