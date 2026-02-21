@@ -100,26 +100,29 @@ function closeBothPanels() {
 // 1) 이미지 폭이 화면폭 넘으면: 양쪽 여백 조금 주고 폭에 맞춤 (width: 100% 느낌)
 // 2) 아니면: 세로 길이를 화면의 20% 정도 (height: 20vh)로 보이게
 function applySizingRules() {
-  const vw = window.innerWidth;
-  const pad = 14 * 2; // 좌우 여백
-  const maxW = vw - pad;
+  const pad = 14 * 2; // 좌우 여백(대략)
+  const maxW = window.innerWidth - pad;
+  const maxH = window.innerHeight - parseInt(getComputedStyle(document.documentElement).getPropertyValue("--topbar-h")) - 70;
 
-  // naturalWidth는 이미지 로드 후에만 정확함
   const nw = el.img.naturalWidth || 0;
+  const nh = el.img.naturalHeight || 0;
 
   // 초기화
   el.img.style.width = "";
   el.img.style.height = "";
 
-  if (nw > maxW) {
-    // 폭이 큰 공식: 폭 기준 맞춤
-    el.img.style.width = `calc(100vw - ${pad}px)`;
-    el.img.style.height = "auto";
-  } else {
-    // 폭이 작은 공식: 높이를 20vh 정도로
-    el.img.style.height = "20vh";
-    el.img.style.width = "auto";
+  // "큰 이미지" 판단: 원본이 화면 표시 한도를 넘는 경우
+  const isLarge = (nw > maxW) || (nh > maxH);
+
+  if (isLarge) {
+    // 큰 이미지는 CSS max- 규칙으로 비율 유지 축소되게 두기
+    // (아무것도 강제하지 않음)
+    return;
   }
+
+  // 작은 이미지는 세로를 20vh 정도로 보이게 (비율은 유지됨)
+  el.img.style.height = "20vh";
+  el.img.style.width = "auto";
 }
 
 function showFormula(filename, { silent = false } = {}) {
