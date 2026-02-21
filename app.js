@@ -37,10 +37,26 @@ const el = {
   excludedCount: document.getElementById("excludedCount"),
 };
 
+let META = {}; // filename -> description
 let excluded = loadExcluded(); // Set of filenames
 let current = null;
 
 // ---------- util ----------
+async function loadMeta() {
+  try {
+    const res = await fetch("formulas/meta.json", { cache: "no-store" });
+    if (!res.ok) return {};
+    const data = await res.json();
+    return (data && typeof data === "object") ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+function labelOf(filename) {
+  return META[filename] || filename; // 설명 없으면 파일명 표시
+}
+
 function loadExcluded() {
   try {
     const raw = localStorage.getItem(LS_KEY);
@@ -134,7 +150,7 @@ function showFormula(filename, { silent = false } = {}) {
 
   current = filename;
   el.img.src = `formulas/${encodeURIComponent(filename)}`;
-  el.filename.textContent = filename;
+  el.filename.textContent = labelOf(filename);
 
   // 이미지 로드 후 규칙 적용
   el.img.onload = () => applySizingRules();
@@ -147,7 +163,7 @@ function showRandomNext() {
 
   if (pool.length === 0) {
     // 다 외웠음(전부 제외됨)
-    el.filename.textContent = "전부 제외됨(=다 외웠음). 제외 목록에서 다시 포함시켜줘.";
+    el.filename.textContent = labelOf(filename); = "전부 제외됨(=다 외웠음). 제외 목록에서 다시 포함시켜줘.";
     el.img.removeAttribute("src");
     current = null;
     return;
@@ -177,7 +193,7 @@ function makeThumb(filename, { mode }) {
 
   const cap = document.createElement("div");
   cap.className = "cap";
-  cap.textContent = filename;
+  cap.textContent = labelOf(filename);
 
   wrap.appendChild(img);
   wrap.appendChild(cap);
@@ -282,15 +298,18 @@ window.addEventListener("resize", () => {
 });
 
 // ---------- init ----------
-function init() {
-  // excluded에 FORMULAS에 없는 값이 들어있으면 정리(파일 삭제 등 대비)
+async function init() {
   excluded = new Set([...excluded].filter(f => FORMULAS.includes(f)));
   saveExcluded();
+
+  META = await loadMeta();   // ✅ 여기 추가
 
   setCounts();
   renderGrids();
   showRandomNext();
 }
+
+init();
 // iOS 더블탭 줌 방지 (빠르게 연타할 때 확대되는 현상)
 let lastTouchEnd = 0;
 document.addEventListener("touchend", (e) => {
