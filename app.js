@@ -284,5 +284,16 @@ function init() {
   renderGrids();
   showRandomNext();
 }
+// iOS 더블탭 줌 방지 (빠르게 연타할 때 확대되는 현상)
+let lastTouchEnd = 0;
+document.addEventListener("touchend", (e) => {
+  const now = Date.now();
+  if (now - lastTouchEnd <= 300) {
+    e.preventDefault();
+  }
+  lastTouchEnd = now;
+}, { passive: false });
 
+// 핀치줌(제스처) 방지(필요하면)
+document.addEventListener("gesturestart", (e) => e.preventDefault());
 init();
