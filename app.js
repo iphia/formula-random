@@ -1,25 +1,11 @@
-/**
- * 공식 이미지 목록은 여기 배열에 파일명만 추가하면 됨.
- * 예: formulas 폴더에 f01.png 넣었으면 "f01.png" 추가.
- */
-const FORMULAS = [
-  "f000.png",
-  "f001.png",
-  "f002.png",
-  "f003.png",
-  "f004.png",
-  "f005.png",
-  "f006.png",
-  "f007.png",
-  "f008.png",
-  "f009.png"
-];
+// ===== 저장 키 =====
+const STORE_KEY = "latex_formulas_store_v1";
+const EXCLUDE_KEY = "latex_formulas_excluded_v1";
 
-const LS_KEY = "formula_excluded_set_v1";
-
+// ===== DOM =====
 const el = {
   stage: document.getElementById("stage"),
-  img: document.getElementById("formulaImg"),
+  formulaBox: document.getElementById("formulaBox"),
   filename: document.getElementById("filename"),
 
   btnExclude: document.getElementById("btnExclude"),
@@ -30,37 +16,53 @@ const el = {
   panelExcluded: document.getElementById("panelExcluded"),
   closeUnlearned: document.getElementById("closeUnlearned"),
   closeExcluded: document.getElementById("closeExcluded"),
-
   gridUnlearned: document.getElementById("gridUnlearned"),
   gridExcluded: document.getElementById("gridExcluded"),
 
   unlearnedCount: document.getElementById("unlearnedCount"),
   excludedCount: document.getElementById("excludedCount"),
+
+  fab: document.getElementById("fab"),
+  sheet: document.getElementById("sheet"),
+  btnAdd: document.getElementById("btnAdd"),
+  btnBackup: document.getElementById("btnBackup"),
+  fileRestore: document.getElementById("fileRestore"),
+  btnSheetClose: document.getElementById("btnSheetClose"),
+
+  modal: document.getElementById("modal"),
+  inpDesc: document.getElementById("inpDesc"),
+  inpTex: document.getElementById("inpTex"),
+  btnPreview: document.getElementById("btnPreview"),
+  btnSave: document.getElementById("btnSave"),
+  btnCancel: document.getElementById("btnCancel"),
+  preview: document.getElementById("preview"),
 };
 
-let META = {}; // filename -> description
-let excluded = loadExcluded(); // Set of filenames
-let current = null;
+// ===== 상태 =====
+let FORMULAS = loadStore();             // [{id, desc, tex}]
+let excluded = loadExcluded();          // Set(ids)
+let currentId = null;
 
-// ---------- util ----------
-async function loadMeta() {
+// ===== 저장/로드 =====
+function loadStore() {
   try {
-    const res = await fetch("formulas/meta.json", { cache: "no-store" });
-    if (!res.ok) return {};
-    const data = await res.json();
-    return (data && typeof data === "object") ? data : {};
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter(x => x && typeof x.id === "string" && typeof x.tex === "string")
+      .map(x => ({ id: x.id, desc: String(x.desc ?? ""), tex: x.tex }));
   } catch {
-    return {};
+    return [];
   }
 }
-
-function labelOf(filename) {
-  return META[filename] || filename; // 설명 없으면 파일명 표시
+function saveStore() {
+  localStorage.setItem(STORE_KEY, JSON.stringify(FORMULAS));
 }
-
 function loadExcluded() {
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(EXCLUDE_KEY);
     if (!raw) return new Set();
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return new Set();
@@ -69,28 +71,44 @@ function loadExcluded() {
     return new Set();
   }
 }
-
 function saveExcluded() {
-  localStorage.setItem(LS_KEY, JSON.stringify([...excluded]));
+  localStorage.setItem(EXCLUDE_KEY, JSON.stringify([...excluded]));
+}
+function newId() {
+  return "f_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
 }
 
-function shufflePick(arr) {
-  if (arr.length === 0) return null;
-  const i = Math.floor(Math.random() * arr.length);
-  return arr[i];
+// ===== 유틸 =====
+function byId(id) {
+  return FORMULAS.find(f => f.id === id) || null;
 }
-
 function availableFormulas() {
-  // "아직 외우지 못한" = 전체 - excluded
-  return FORMULAS.filter(f => !excluded.has(f));
+  return FORMULAS.filter(f => !excluded.has(f.id));
 }
-
+function shufflePick(arr) {
+  return arr.length ? arr[Math.floor(Math.random() * arr.length)] : null;
+}
 function setCounts() {
-  const unlearned = availableFormulas().length;
-  el.unlearnedCount.textContent = String(unlearned);
+  el.unlearnedCount.textContent = String(availableFormulas().length);
   el.excludedCount.textContent = String(excluded.size);
 }
 
+// ===== KaTeX 렌더 =====
+function renderKatexInto(node, tex, { displayMode = true } = {}) {
+  node.textContent = "";
+  if (!window.katex) { node.textContent = tex; return; }
+  try {
+    katex.render(tex, node, {
+      throwOnError: false,
+      displayMode,
+      strict: "ignore",
+    });
+  } catch {
+    node.textContent = tex;
+  }
+}
+
+// ===== 패널 =====
 function openPanel(which) {
   if (which === "left") {
     el.panelUnlearned.classList.add("open", "left");
@@ -100,7 +118,6 @@ function openPanel(which) {
     el.panelExcluded.setAttribute("aria-hidden", "false");
   }
 }
-
 function closePanel(which) {
   if (which === "left") {
     el.panelUnlearned.classList.remove("open", "left");
@@ -110,112 +127,68 @@ function closePanel(which) {
     el.panelExcluded.setAttribute("aria-hidden", "true");
   }
 }
-
 function closeBothPanels() {
   closePanel("left");
   closePanel("right");
 }
 
-// ---------- image sizing rule ----------
-// 규칙:
-// 1) 이미지 폭이 화면폭 넘으면: 양쪽 여백 조금 주고 폭에 맞춤 (width: 100% 느낌)
-// 2) 아니면: 세로 길이를 화면의 20% 정도 (height: 20vh)로 보이게
-function applySizingRules() {
-  const pad = 14 * 2; // 좌우 여백(대략)
-  const maxW = window.innerWidth - pad;
-  const maxH = window.innerHeight - parseInt(getComputedStyle(document.documentElement).getPropertyValue("--topbar-h")) - 70;
+// ===== 표시 =====
+function showFormula(id) {
+  const item = byId(id);
+  if (!item) return;
+  currentId = item.id;
 
-  const nw = el.img.naturalWidth || 0;
-  const nh = el.img.naturalHeight || 0;
+  renderKatexInto(el.formulaBox, item.tex, { displayMode: true });
+  el.filename.textContent = item.desc || "";
 
-  // 초기화
-  el.img.style.width = "";
-  el.img.style.height = "";
-
-  // "큰 이미지" 판단: 원본이 화면 표시 한도를 넘는 경우
-  const isLarge = (nw > maxW) || (nh > maxH);
-
-  if (isLarge) {
-    // 큰 이미지는 CSS max- 규칙으로 비율 유지 축소되게 두기
-    // (아무것도 강제하지 않음)
-    return;
-  }
-
-  // 작은 이미지는 세로를 20vh 정도로 보이게 (비율은 유지됨)
-  el.img.style.height = "20vh";
-  el.img.style.width = "auto";
+  closeBothPanels();
 }
-
-function showFormula(filename, { silent = false } = {}) {
-  if (!filename) return;
-
-  current = filename;
-  el.img.src = `formulas/${encodeURIComponent(filename)}`;
-  el.filename.textContent = labelOf(filename);
-
-  // 이미지 로드 후 규칙 적용
-  el.img.onload = () => applySizingRules();
-
-  if (!silent) closeBothPanels();
-}
-
 function showRandomNext() {
   const pool = availableFormulas();
-
   if (pool.length === 0) {
-    // 다 외웠음(전부 제외됨)
     el.filename.textContent = "전부 제외됨(=다 외웠음). 제외 목록에서 다시 포함시켜줘.";
-    el.img.removeAttribute("src");
-    current = null;
+    el.formulaBox.textContent = "";
+    currentId = null;
     return;
   }
-
-  // 지금 보고 있는 것과 똑같은 게 계속 나오는 거 방지(가능하면)
   let pick = shufflePick(pool);
-  if (pool.length >= 2 && pick === current) {
-    pick = shufflePick(pool.filter(x => x !== current));
+  if (pool.length >= 2 && pick.id === currentId) {
+    pick = shufflePick(pool.filter(x => x.id !== currentId));
   }
-  showFormula(pick);
+  showFormula(pick.id);
 }
 
-// ---------- grid render ----------
-function makeThumb(filename, { mode }) {
-  // mode:
-  // - "view" (미암기 목록): 누르면 그 공식 바로 보기
-  // - "include" (제외 목록): 누르면 다시 포함(=excluded에서 제거)
+// ===== 그리드 =====
+function makeThumb(item, mode) {
   const wrap = document.createElement("div");
   wrap.className = "thumb";
   wrap.tabIndex = 0;
 
-  const img = document.createElement("img");
-  img.loading = "lazy";
-  img.alt = filename;
-  img.src = `formulas/${encodeURIComponent(filename)}`;
-
   const cap = document.createElement("div");
   cap.className = "cap";
-  cap.textContent = labelOf(filename);
+  cap.textContent = item.desc || "(설명 없음)";
 
-  wrap.appendChild(img);
+  const mini = document.createElement("div");
+  mini.className = "mini";
+  renderKatexInto(mini, item.tex, { displayMode: false });
+
   wrap.appendChild(cap);
+  wrap.appendChild(mini);
 
   const action = () => {
     if (mode === "view") {
-      showFormula(filename);
-    } else if (mode === "include") {
-      excluded.delete(filename);
+      showFormula(item.id);
+    } else {
+      // include
+      excluded.delete(item.id);
       saveExcluded();
       setCounts();
       renderGrids();
-      // 포함시킨 뒤엔 랜덤풀에 들어가니, 원하면 바로 보여주게도 할 수 있음
-      showFormula(filename);
+      showFormula(item.id);
     }
   };
 
-  wrap.addEventListener("click", (e) => {
-    e.stopPropagation();
-    action();
-  });
+  wrap.addEventListener("click", (e) => { e.stopPropagation(); action(); });
   wrap.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -226,100 +199,187 @@ function makeThumb(filename, { mode }) {
 
   return wrap;
 }
-
 function renderGrids() {
-  // 미암기(=excluded 제외한 것들)
-  const unlearned = availableFormulas();
   el.gridUnlearned.innerHTML = "";
-  unlearned.forEach(f => el.gridUnlearned.appendChild(makeThumb(f, { mode: "view" })));
+  availableFormulas().forEach(item => el.gridUnlearned.appendChild(makeThumb(item, "view")));
 
-  // 제외(외운 것)
-  const ex = [...excluded].filter(f => FORMULAS.includes(f));
   el.gridExcluded.innerHTML = "";
-  ex.forEach(f => el.gridExcluded.appendChild(makeThumb(f, { mode: "include" })));
+  [...excluded].map(byId).filter(Boolean).forEach(item => el.gridExcluded.appendChild(makeThumb(item, "include")));
 }
 
-// ---------- events ----------
+// ===== 메뉴/모달 =====
+function openSheet() {
+  el.sheet.classList.add("open");
+  el.sheet.setAttribute("aria-hidden", "false");
+}
+function closeSheet() {
+  el.sheet.classList.remove("open");
+  el.sheet.setAttribute("aria-hidden", "true");
+}
+function openModal() {
+  el.modal.classList.add("open");
+  el.modal.setAttribute("aria-hidden", "false");
+  el.inpDesc.value = "";
+  el.inpTex.value = "";
+  el.preview.textContent = "";
+}
+function closeModal() {
+  el.modal.classList.remove("open");
+  el.modal.setAttribute("aria-hidden", "true");
+}
+
+// ===== 백업/복원 =====
+function downloadBackup() {
+  const payload = {
+    version: 1,
+    formulas: FORMULAS,
+    excluded: [...excluded],
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "formulas_backup.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function restoreFromFile(file) {
+  const text = await file.text();
+  const data = JSON.parse(text);
+
+  if (!data || !Array.isArray(data.formulas)) throw new Error("invalid backup");
+
+  const formulas = data.formulas
+    .filter(x => x && typeof x.id === "string" && typeof x.tex === "string")
+    .map(x => ({ id: x.id, desc: String(x.desc ?? ""), tex: x.tex }));
+
+  FORMULAS = formulas;
+  saveStore();
+
+  excluded = new Set(Array.isArray(data.excluded) ? data.excluded.filter(x => typeof x === "string") : []);
+  saveExcluded();
+
+  init(); // 화면 갱신
+}
+
+// ===== 이벤트 =====
 function isClickOnUI(target) {
   return (
     target.closest("#topbar") ||
     target.closest(".panel") ||
-    target.closest(".topbtn") ||
     target.closest(".thumb") ||
-    target.closest(".closeBtn")
+    target.closest(".closeBtn") ||
+    target.closest(".fab") ||
+    target.closest(".sheet") ||
+    target.closest(".modal")
   );
 }
 
+// 화면 탭 → 다음 공식
 el.stage.addEventListener("touchend", (e) => {
   if (isClickOnUI(e.target)) return;
-  e.preventDefault();         // 핵심: 기본 동작(줌 등) 방지
+  e.preventDefault();
   showRandomNext();
 }, { passive: false });
-
-// 데스크탑/일반 브라우저용
 el.stage.addEventListener("click", (e) => {
   if (isClickOnUI(e.target)) return;
   showRandomNext();
 });
 
+// 상단 버튼
 el.btnExclude.addEventListener("click", (e) => {
   e.stopPropagation();
-  if (!current) return;
-  excluded.add(current);
+  if (!currentId) return;
+  excluded.add(currentId);
   saveExcluded();
   setCounts();
   renderGrids();
   showRandomNext();
 });
+el.btnUnlearned.addEventListener("click", (e) => { e.stopPropagation(); renderGrids(); openPanel("left"); });
+el.btnExcluded.addEventListener("click", (e) => { e.stopPropagation(); renderGrids(); openPanel("right"); });
+el.closeUnlearned.addEventListener("click", (e) => { e.stopPropagation(); closePanel("left"); });
+el.closeExcluded.addEventListener("click", (e) => { e.stopPropagation(); closePanel("right"); });
 
-el.btnUnlearned.addEventListener("click", (e) => {
-  e.stopPropagation();
-  renderGrids();
-  openPanel("left");
+// 우하단 메뉴
+el.fab.addEventListener("click", (e) => { e.stopPropagation(); openSheet(); });
+el.btnSheetClose.addEventListener("click", (e) => { e.stopPropagation(); closeSheet(); });
+el.sheet.addEventListener("click", (e) => { if (e.target === el.sheet) closeSheet(); });
+
+// 메뉴 항목
+el.btnAdd.addEventListener("click", () => { closeSheet(); openModal(); });
+el.btnBackup.addEventListener("click", () => { closeSheet(); downloadBackup(); });
+el.fileRestore.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    closeSheet();
+    await restoreFromFile(file);
+  } catch {
+    alert("복원 실패: JSON 형식이 이상함");
+  }
 });
 
-el.btnExcluded.addEventListener("click", (e) => {
-  e.stopPropagation();
-  renderGrids();
-  openPanel("right");
+// 추가 모달
+el.btnPreview.addEventListener("click", () => {
+  const tex = el.inpTex.value.trim();
+  el.preview.textContent = "";
+  if (!tex) return;
+  renderKatexInto(el.preview, tex, { displayMode: true });
 });
+el.btnSave.addEventListener("click", () => {
+  const tex = el.inpTex.value.trim();
+  const desc = el.inpDesc.value.trim();
+  if (!tex) return;
 
-el.closeUnlearned.addEventListener("click", (e) => {
-  e.stopPropagation();
-  closePanel("left");
-});
-el.closeExcluded.addEventListener("click", (e) => {
-  e.stopPropagation();
-  closePanel("right");
-});
-
-// 창 크기 바뀌면 현재 이미지 규칙 다시 적용
-window.addEventListener("resize", () => {
-  if (current) applySizingRules();
-});
-
-// ---------- init ----------
-async function init() {
-  excluded = new Set([...excluded].filter(f => FORMULAS.includes(f)));
-  saveExcluded();
-
-  META = await loadMeta();   // ✅ 여기 추가
+  const item = { id: newId(), desc, tex };
+  FORMULAS.push(item);
+  saveStore();
 
   setCounts();
   renderGrids();
-  showRandomNext();
-}
-init();
+  showFormula(item.id);
+  closeModal();
+});
+el.btnCancel.addEventListener("click", closeModal);
+el.modal.addEventListener("click", (e) => { if (e.target === el.modal) closeModal(); });
 
 // iOS 더블탭 줌 방지
 let lastTouchEnd = 0;
 document.addEventListener("touchend", (e) => {
   const now = Date.now();
-  if (now - lastTouchEnd <= 300) {
-    e.preventDefault();
-  }
+  if (now - lastTouchEnd <= 300) e.preventDefault();
   lastTouchEnd = now;
 }, { passive: false });
-
-// 핀치줌(제스처) 방지(필요하면)
 document.addEventListener("gesturestart", (e) => e.preventDefault());
+
+// ===== 초기 샘플(처음 실행 편의) =====
+function ensureSeed() {
+  if (FORMULAS.length > 0) return;
+  FORMULAS = [
+    { id: newId(), desc: "유효전력", tex: String.raw`P = VI\cos\theta` },
+    { id: newId(), desc: "무효전력", tex: String.raw`Q = VI\sin\theta` },
+  ];
+  saveStore();
+}
+
+// ===== init =====
+function init() {
+  ensureSeed();
+
+  // excluded 정리(없는 id 제거)
+  const ids = new Set(FORMULAS.map(f => f.id));
+  excluded = new Set([...excluded].filter(id => ids.has(id)));
+  saveExcluded();
+
+  setCounts();
+  renderGrids();
+  showRandomNext();
+}
+
+init();
