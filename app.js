@@ -11,7 +11,8 @@ const FORMULAS = [
   "f005.png",
   "f006.png",
   "f007.png",
-  "f008.png"
+  "f008.png",
+  "f009.png"
 ];
 
 const LS_KEY = "formula_excluded_set_v1";
