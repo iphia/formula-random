@@ -226,8 +226,14 @@ function isClickOnUI(target) {
   );
 }
 
+el.stage.addEventListener("touchend", (e) => {
+  if (isClickOnUI(e.target)) return;
+  e.preventDefault();         // 핵심: 기본 동작(줌 등) 방지
+  showRandomNext();
+}, { passive: false });
+
+// 데스크탑/일반 브라우저용
 el.stage.addEventListener("click", (e) => {
-  // UI 눌렀으면 랜덤 넘김 방지
   if (isClickOnUI(e.target)) return;
   showRandomNext();
 });
