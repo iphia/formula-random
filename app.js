@@ -133,7 +133,7 @@ function showFormula(filename, { silent = false } = {}) {
   if (!filename) return;
 
   current = filename;
-  el.img.src = `formulas/${filename}`;
+  el.img.src = `formulas/${encodeURIComponent(filename)}`;
   el.filename.textContent = filename;
 
   // 이미지 로드 후 규칙 적용
@@ -173,7 +173,7 @@ function makeThumb(filename, { mode }) {
   const img = document.createElement("img");
   img.loading = "lazy";
   img.alt = filename;
-  img.src = `formulas/${filename}`;
+  img.src = `formulas/${encodeURIComponent(filename)}`;
 
   const cap = document.createElement("div");
   cap.className = "cap";
