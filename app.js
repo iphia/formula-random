@@ -3,9 +3,10 @@
  * 예: formulas 폴더에 f01.png 넣었으면 "f01.png" 추가.
  */
 const FORMULAS = [
-  "f01.png",
-  "f02.png",
-  "f03.png",
+  "f000.png",
+  "f001.png",
+  "f002.png",
+  "f003.png",
   // ...
 ];
 
