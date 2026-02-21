@@ -3,12 +3,17 @@
  * 예: formulas 폴더에 f01.png 넣었으면 "f01.png" 추가.
  */
 const FORMULAS = [
-  "f000.png",
-  "f001.png",
-  "f002.png",
-  "f003.png",
-  // ...
+  "감자기자력.png",
+  "교차기자력.png",
+  "기동토크=전부하토크.png",
+  "반사계수.png",
+  "소호리액터.png",
+  "소호리액터_용량.png",
+  "송전전력.png",
+  "정전용량.png",
+  "투과계수.png"
 ];
+
 
 const LS_KEY = "formula_excluded_set_v1";
 
