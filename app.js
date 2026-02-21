@@ -163,7 +163,7 @@ function showRandomNext() {
 
   if (pool.length === 0) {
     // 다 외웠음(전부 제외됨)
-    el.filename.textContent = labelOf(filename); = "전부 제외됨(=다 외웠음). 제외 목록에서 다시 포함시켜줘.";
+    el.filename.textContent = "전부 제외됨(=다 외웠음). 제외 목록에서 다시 포함시켜줘.";
     el.img.removeAttribute("src");
     current = null;
     return;
@@ -308,9 +308,9 @@ async function init() {
   renderGrids();
   showRandomNext();
 }
-
 init();
-// iOS 더블탭 줌 방지 (빠르게 연타할 때 확대되는 현상)
+
+// iOS 더블탭 줌 방지
 let lastTouchEnd = 0;
 document.addEventListener("touchend", (e) => {
   const now = Date.now();
@@ -322,4 +322,3 @@ document.addEventListener("touchend", (e) => {
 
 // 핀치줌(제스처) 방지(필요하면)
 document.addEventListener("gesturestart", (e) => e.preventDefault());
-init();
