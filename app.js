@@ -425,7 +425,7 @@ function tryAdvance(e) {
   if (isClickOnUI(e.target)) return;
 
   const now = Date.now();
-  if (now - lastAdvanceAt < 500) return; // 길게 눌렀을 때 늦게 오는 합성 click까지 차단
+  if (now - lastAdvanceAt < 300) return; // 길게 눌렀을 때 늦게 오는 합성 click까지 차단
   lastAdvanceAt = now;
 
   showRandomNext();
