@@ -44,6 +44,8 @@ let FORMULAS = loadStore();        // [{id, desc, tex}]
 let FORMULA_MAP = new Map();       // id -> formula (O(1))
 let excluded = loadExcluded();     // Set(ids)
 let currentId = null;
+// 스테이지 표시 상태: "desc"(설명) → "formula"(공식)
+let stageView = "desc";
 
 let deck = [];      // 현재 한 바퀴 덱(아이디 배열)
 let deckIndex = 0;  // 다음에 보여줄 위치
@@ -189,12 +191,28 @@ function closeBothPanels() {
 }
 
 // ===== 표시 =====
+function showDesc(id) {
+  const item = byId(id);
+  if (!item) return;
+  currentId = item.id;
+
+  // 설명 먼저 크게 보여주기
+  el.formulaBox.textContent = item.desc || "(설명 없음)";
+  el.filename.textContent = "";
+  stageView = "desc";
+
+  closeBothPanels();
+}
+
 function showFormula(id) {
   const item = byId(id);
   if (!item) return;
   currentId = item.id;
+
   renderKatexInto(el.formulaBox, item.tex, { displayMode: true });
   el.filename.textContent = item.desc || "";
+  stageView = "formula";
+
   closeBothPanels();
 }
 
@@ -202,15 +220,16 @@ function showRandomNext() {
   if (deck.length === 0) rebuildDeck();
 
   if (deck.length === 0) {
-    el.filename.textContent = "전부 제외됨(=다 외웠음). 제외 목록에서 다시 포함시켜줘.";
-    el.formulaBox.textContent = "";
+    el.formulaBox.textContent = "전부 제외됨(=다 외웠음). 제외 목록에서 다시 포함시켜줘.";
+    el.filename.textContent = "";
     currentId = null;
+    stageView = "desc";
     return;
   }
 
   const id = nextFromDeck();
   if (!id) return;
-  showFormula(id);
+  showDesc(id);
 }
 
 // ===== 삭제 =====
@@ -261,7 +280,7 @@ function makeThumb(item, mode) {
 
   const action = () => {
     if (mode === "view") {
-      showFormula(item.id);
+      showDesc(item.id);
     } else {
       excluded.delete(item.id);
       saveExcluded();
@@ -271,7 +290,7 @@ function makeThumb(item, mode) {
 
       setCounts();
       renderGrids();
-      showFormula(item.id);
+      showDesc(item.id);
     }
   };
 
@@ -422,7 +441,13 @@ function isClickOnUI(target) {
 el.stage.addEventListener("pointerdown", (e) => {
   if (isClickOnUI(e.target)) return;
   e.preventDefault();
-  showRandomNext();
+  // 1) 설명 화면이면 → 같은 카드의 공식을 보여줌
+  // 2) 공식 화면이면 → 다음 카드(설명부터)
+  if (currentId && stageView === "desc") {
+    showFormula(currentId);
+  } else {
+    showRandomNext();
+  }
 }, { passive: false });
 
 // 상단 버튼
@@ -497,7 +522,7 @@ el.btnSave.addEventListener("click", () => {
 
   setCounts();
   renderGrids();
-  showFormula(item.id);
+  showDesc(item.id);
   closeModal();
 });
 
