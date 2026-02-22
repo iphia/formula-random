@@ -8,10 +8,11 @@
 }
 
 *{ box-sizing:border-box; }
+
 html, body{
   height:100%;
-  touch-action: manipulation;
 }
+
 body{
   margin:0;
   background:#fff;
@@ -19,11 +20,13 @@ body{
   font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif;
   overflow:hidden;
 
-  -webkit-user-select:none;
-  user-select:none;
-  -webkit-touch-callout:none;
+  /* 전역 선택/콜아웃 잠금 제거 (입력/패널에서 복사/커서 드래그 가능하게) */
+  -webkit-user-select:auto;
+  user-select:auto;
+  -webkit-touch-callout:default;
 }
 
+/* ===== 상단바 ===== */
 .topbar{
   position:fixed;
   inset:0 0 auto 0;
@@ -67,12 +70,19 @@ body{
   font-size:12px;
 }
 
+/* ===== 메인 스테이지 ===== */
 .stage{
   position:absolute;
   inset:var(--topbar-h) 0 0 0;
   display:grid;
   place-items:center;
   padding:18px var(--pad);
+
+  /* 탭 전용 영역만 제스처/선택 제한 */
+  touch-action: manipulation;
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
 }
 
 .hint{
@@ -91,6 +101,9 @@ body{
   font-size:24px;
   line-height:1.35;
   padding:8px 6px;
+
+  /* iOS 내부 스크롤 관성 */
+  -webkit-overflow-scrolling: touch;
 }
 
 .filename{
@@ -102,7 +115,7 @@ body{
   font-size:20px;
 }
 
-/* 패널 */
+/* ===== 패널 ===== */
 .panel{
   position:fixed;
   top:var(--topbar-h);
@@ -116,6 +129,15 @@ body{
   z-index:20;
   display:flex;
   flex-direction:column;
+
+  /* 애니 성능 */
+  will-change: transform;
+
+  /* 패널에서는 텍스트 선택 가능 */
+  -webkit-user-select:text;
+  user-select:text;
+  -webkit-touch-callout:default;
+  touch-action: auto;
 }
 .panel.right{
   right:0;
@@ -149,12 +171,19 @@ body{
   grid-template-columns: repeat(3, 1fr);
   gap:10px;
   overflow:auto;
+
+  -webkit-overflow-scrolling: touch;
 }
 .thumb{
   border:1px solid var(--border);
   border-radius:10px;
   padding:8px;
   cursor:pointer;
+
+  /* thumb는 탭 UX 중심 */
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
 }
 .thumb .cap{
   font-size:11px;
@@ -169,7 +198,7 @@ body{
   overflow:hidden;
 }
 
-/* 우하단 메뉴 버튼 */
+/* ===== 우하단 메뉴 버튼 ===== */
 .fab{
   position:fixed;
   right:16px;
@@ -186,7 +215,7 @@ body{
 }
 .fab:active{ transform: translateY(1px); }
 
-/* 메뉴 시트 */
+/* ===== 메뉴 시트 ===== */
 .sheet{
   position:fixed;
   inset:0;
@@ -196,8 +225,14 @@ body{
   justify-content:center;
   z-index:40;
   padding:16px;
+
+  /* 선택 가능 */
+  -webkit-user-select:text;
+  user-select:text;
+  touch-action:auto;
 }
 .sheet.open{ display:flex; }
+
 .sheetCard{
   width:min(520px, 96vw);
   background:#fff;
@@ -221,7 +256,7 @@ body{
 .sheetBtn.danger{ color:#b00020; }
 .fileBtn{ cursor:pointer; }
 
-/* 추가 모달 */
+/* ===== 추가 모달 ===== */
 .modal{
   position:fixed;
   inset:0;
@@ -231,14 +266,25 @@ body{
   justify-content:center;
   z-index:50;
   padding:16px;
+
+  -webkit-user-select:text;
+  user-select:text;
+  touch-action:auto;
 }
 .modal.open{ display:flex; }
+
 .modalCard{
   width:min(520px, 96vw);
   background:#fff;
   border:1px solid var(--border);
   border-radius:16px;
   padding:14px;
+
+  /* 키보드 뜰 때 잘리면 스크롤로 구제 */
+  max-height: 90dvh;
+  overflow:auto;
+
+  -webkit-overflow-scrolling: touch;
 }
 .modalTitle{ font-weight:900; margin-bottom:10px; }
 .field{ display:block; margin:10px 0; }
@@ -250,6 +296,10 @@ body{
   padding:10px;
   font-size:16px;
   outline:none;
+
+  /* iOS 입력 UX */
+  -webkit-user-select:text;
+  user-select:text;
 }
 .modalBtns{
   display:flex;
@@ -264,7 +314,10 @@ body{
   border-radius:12px;
   min-height:48px;
   overflow:auto;
+
+  -webkit-overflow-scrolling: touch;
 }
+
 .panelFooter{
   margin-top: auto;
   padding: 10px var(--pad);
