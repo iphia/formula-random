@@ -384,14 +384,18 @@ function isClickOnUI(target) {
   );
 }
 
-// 화면 탭 → 다음 공식
+// 화면 탭 → 다음 공식 (touch와 click 중복 호출 방지)
+let ignoreClickUntil = 0;
+
 el.stage.addEventListener("touchend", (e) => {
   if (isClickOnUI(e.target)) return;
   e.preventDefault();
+  ignoreClickUntil = Date.now() + 600; // 이후 0.6초 동안 click 무시
   showRandomNext();
 }, { passive: false });
 
 el.stage.addEventListener("click", (e) => {
+  if (Date.now() < ignoreClickUntil) return;
   if (isClickOnUI(e.target)) return;
   showRandomNext();
 });
