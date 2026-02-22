@@ -42,6 +42,8 @@ const el = {
 let FORMULAS = loadStore();        // [{id, desc, tex}]
 let excluded = loadExcluded();     // Set(ids)
 let currentId = null;
+let deck = [];      // 현재 한 바퀴 덱(아이디 배열)
+let deckIndex = 0;  // 다음에 보여줄 위치
 
 // ===== 저장/로드 =====
 function loadStore() {
@@ -79,6 +81,45 @@ function newId() {
 }
 
 // ===== 유틸 =====
+function shuffleInPlace(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function rebuildDeck() {
+  const pool = availableFormulas().map(f => f.id);
+
+  if (pool.length === 0) {
+    deck = [];
+    deckIndex = 0;
+    return;
+  }
+
+  deck = shuffleInPlace(pool);
+  deckIndex = 0;
+
+  // 첫 장이 직전과 같으면(가능할 때) 한 번 회피
+  if (deck.length >= 2 && deck[0] === currentId) {
+    [deck[0], deck[1]] = [deck[1], deck[0]];
+  }
+}
+
+function nextFromDeck() {
+  if (deck.length === 0) return null;
+
+  if (deckIndex >= deck.length) {
+    // 한 바퀴 끝 → 다시 셔플해서 새 바퀴
+    rebuildDeck();
+    if (deck.length === 0) return null;
+  }
+
+  const id = deck[deckIndex];
+  deckIndex += 1;
+  return id;
+}
 function byId(id) {
   return FORMULAS.find(f => f.id === id) || null;
 }
@@ -142,18 +183,26 @@ function showFormula(id) {
   closeBothPanels();
 }
 function showRandomNext() {
-  const pool = availableFormulas();
-  if (pool.length === 0) {
+  // 덱이 비었거나, 덱이 현재 풀(미암기)과 안 맞을 수 있으니 필요하면 재구성
+  const poolIds = new Set(availableFormulas().map(f => f.id));
+
+  const deckValid =
+    deck.length > 0 &&
+    deck.every(id => poolIds.has(id)); // 제외/삭제로 풀 바뀌면 무효
+
+  if (!deckValid) rebuildDeck();
+
+  if (deck.length === 0) {
     el.filename.textContent = "전부 제외됨(=다 외웠음). 제외 목록에서 다시 포함시켜줘.";
     el.formulaBox.textContent = "";
     currentId = null;
     return;
   }
-  let pick = shufflePick(pool);
-  if (pool.length >= 2 && pick.id === currentId) {
-    pick = shufflePick(pool.filter(x => x.id !== currentId));
-  }
-  showFormula(pick.id);
+
+  const id = nextFromDeck();
+  if (!id) return;
+
+  showFormula(id);
 }
 
 // ===== 삭제 =====
@@ -205,6 +254,7 @@ function makeThumb(item, mode) {
       showFormula(item.id);
     } else {
       excluded.delete(item.id);
+      rebuildDeck();
       saveExcluded();
       setCounts();
       renderGrids();
@@ -351,6 +401,7 @@ el.btnExclude.addEventListener("click", (e) => {
   if (!currentId) return;
   excluded.add(currentId);
   saveExcluded();
+  rebuildDeck();
   setCounts();
   renderGrids();
   showRandomNext();
@@ -445,6 +496,7 @@ function init() {
 
   setCounts();
   renderGrids();
+  rebuildDeck();
   showRandomNext();
 }
 
