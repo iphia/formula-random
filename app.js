@@ -36,6 +36,7 @@ const el = {
   btnSave: document.getElementById("btnSave"),
   btnCancel: document.getElementById("btnCancel"),
   preview: document.getElementById("preview"),
+  panelFooter: document.getElementById("panelFooter"),
 };
 
 // ===== 상태 =====
@@ -494,6 +495,9 @@ function init() {
   excluded = new Set([...excluded].filter(id => ids.has(id)));
   saveExcluded();
 
+  const v = document.querySelector('meta[name="app-version"]')?.content || "v?";
+el.panelFooter.textContent = `버전: ${v}`;
+  
   setCounts();
   renderGrids();
   rebuildDeck();
