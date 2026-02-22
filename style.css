@@ -168,7 +168,7 @@ body{
 .grid{
   padding:12px var(--pad);
   display:grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap:10px;
   overflow:auto;
 
@@ -179,6 +179,7 @@ body{
   border-radius:10px;
   padding:8px;
   cursor:pointer;
+  min-width: 0;
 
   /* thumb는 탭 UX 중심 */
   -webkit-user-select:none;
@@ -188,9 +189,19 @@ body{
 .thumb .cap{
   font-size:11px;
   color:var(--muted);
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+
+  /* 2줄까지만 표시, 넘치면 ... */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+
+  overflow: hidden;
+  white-space: normal;
+
+  /* 가로 늘어짐 방지용 안전장치 */
+  min-width: 0;
+  max-width: 100%;
+  word-break: break-word;
 }
 .thumb .mini{
   margin-top:6px;
