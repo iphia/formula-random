@@ -41,8 +41,10 @@ const el = {
 
 // ===== 상태 =====
 let FORMULAS = loadStore();        // [{id, desc, tex}]
+let FORMULA_MAP = new Map();       // id -> formula (O(1))
 let excluded = loadExcluded();     // Set(ids)
 let currentId = null;
+
 let deck = [];      // 현재 한 바퀴 덱(아이디 배열)
 let deckIndex = 0;  // 다음에 보여줄 위치
 
@@ -61,7 +63,12 @@ function loadStore() {
   }
 }
 function saveStore() {
-  localStorage.setItem(STORE_KEY, JSON.stringify(FORMULAS));
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(FORMULAS));
+  } catch {
+    // iOS/사파리 환경에서 가끔 실패할 수 있음(프라이빗/용량 등)
+    // 여기서 굳이 alert 안 띄우고 조용히 실패 처리
+  }
 }
 function loadExcluded() {
   try {
@@ -75,10 +82,22 @@ function loadExcluded() {
   }
 }
 function saveExcluded() {
-  localStorage.setItem(EXCLUDE_KEY, JSON.stringify([...excluded]));
+  try {
+    localStorage.setItem(EXCLUDE_KEY, JSON.stringify([...excluded]));
+  } catch {
+    // 조용히 실패
+  }
 }
 function newId() {
   return "f_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
+}
+
+// ===== 맵 캐시 =====
+function rebuildMap() {
+  FORMULA_MAP = new Map(FORMULAS.map(f => [f.id, f]));
+}
+function byId(id) {
+  return FORMULA_MAP.get(id) || null;
 }
 
 // ===== 유틸 =====
@@ -89,7 +108,15 @@ function shuffleInPlace(a) {
   }
   return a;
 }
+function availableFormulas() {
+  return FORMULAS.filter(f => !excluded.has(f.id));
+}
+function setCounts() {
+  el.unlearnedCount.textContent = String(availableFormulas().length);
+  el.excludedCount.textContent = String(excluded.size);
+}
 
+// ===== 덱 =====
 function rebuildDeck() {
   const pool = availableFormulas().map(f => f.id);
 
@@ -120,19 +147,6 @@ function nextFromDeck() {
   const id = deck[deckIndex];
   deckIndex += 1;
   return id;
-}
-function byId(id) {
-  return FORMULAS.find(f => f.id === id) || null;
-}
-function availableFormulas() {
-  return FORMULAS.filter(f => !excluded.has(f.id));
-}
-function shufflePick(arr) {
-  return arr.length ? arr[Math.floor(Math.random() * arr.length)] : null;
-}
-function setCounts() {
-  el.unlearnedCount.textContent = String(availableFormulas().length);
-  el.excludedCount.textContent = String(excluded.size);
 }
 
 // ===== KaTeX 렌더 =====
@@ -183,15 +197,9 @@ function showFormula(id) {
   el.filename.textContent = item.desc || "";
   closeBothPanels();
 }
+
 function showRandomNext() {
-  // 덱이 비었거나, 덱이 현재 풀(미암기)과 안 맞을 수 있으니 필요하면 재구성
-  const poolIds = new Set(availableFormulas().map(f => f.id));
-
-  const deckValid =
-    deck.length > 0 &&
-    deck.every(id => poolIds.has(id)); // 제외/삭제로 풀 바뀌면 무효
-
-  if (!deckValid) rebuildDeck();
+  if (deck.length === 0) rebuildDeck();
 
   if (deck.length === 0) {
     el.filename.textContent = "전부 제외됨(=다 외웠음). 제외 목록에서 다시 포함시켜줘.";
@@ -202,7 +210,6 @@ function showRandomNext() {
 
   const id = nextFromDeck();
   if (!id) return;
-
   showFormula(id);
 }
 
@@ -212,14 +219,16 @@ function deleteFormula(id) {
   if (idx === -1) return;
 
   FORMULAS.splice(idx, 1);
+  rebuildMap();
   saveStore();
 
   excluded.delete(id);
   saveExcluded();
 
-  if (currentId === id) {
-    currentId = null;
-  }
+  if (currentId === id) currentId = null;
+
+  // 풀 변경 지점 → 덱 재구성
+  rebuildDeck();
 
   setCounts();
   renderGrids();
@@ -255,25 +264,35 @@ function makeThumb(item, mode) {
       showFormula(item.id);
     } else {
       excluded.delete(item.id);
-      rebuildDeck();
       saveExcluded();
+
+      // 풀 변경 지점 → 덱 재구성
+      rebuildDeck();
+
       setCounts();
       renderGrids();
       showFormula(item.id);
     }
   };
 
-  // 롱프레스(길게 누름)로 삭제
+  // 롱프레스(길게 누름)로 삭제 + 드래그/스크롤 시 취소
   let pressTimer = null;
   let longPressed = false;
+  let startX = 0;
+  let startY = 0;
+  const MOVE_CANCEL_PX = 8;
 
-  const startPress = () => {
+  const startPress = (e) => {
     longPressed = false;
+    startX = e.clientX ?? 0;
+    startY = e.clientY ?? 0;
+
     pressTimer = setTimeout(() => {
       longPressed = true;
       confirmDelete(item);
     }, 550);
   };
+
   const cancelPress = () => {
     if (pressTimer) clearTimeout(pressTimer);
     pressTimer = null;
@@ -281,8 +300,16 @@ function makeThumb(item, mode) {
 
   wrap.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    startPress();
+    startPress(e);
   });
+
+  wrap.addEventListener("pointermove", (e) => {
+    if (!pressTimer) return;
+    const dx = Math.abs((e.clientX ?? 0) - startX);
+    const dy = Math.abs((e.clientY ?? 0) - startY);
+    if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) cancelPress();
+  });
+
   wrap.addEventListener("pointerup", cancelPress);
   wrap.addEventListener("pointercancel", cancelPress);
   wrap.addEventListener("pointerleave", cancelPress);
@@ -306,10 +333,17 @@ function makeThumb(item, mode) {
 
 function renderGrids() {
   el.gridUnlearned.innerHTML = "";
-  availableFormulas().forEach(item => el.gridUnlearned.appendChild(makeThumb(item, "view")));
+  const fragU = document.createDocumentFragment();
+  for (const item of availableFormulas()) fragU.appendChild(makeThumb(item, "view"));
+  el.gridUnlearned.appendChild(fragU);
 
   el.gridExcluded.innerHTML = "";
-  [...excluded].map(byId).filter(Boolean).forEach(item => el.gridExcluded.appendChild(makeThumb(item, "include")));
+  const fragE = document.createDocumentFragment();
+  for (const id of excluded) {
+    const item = byId(id);
+    if (item) fragE.appendChild(makeThumb(item, "include"));
+  }
+  el.gridExcluded.appendChild(fragE);
 }
 
 // ===== 메뉴/모달 =====
@@ -363,6 +397,7 @@ async function restoreFromFile(file) {
     .map(x => ({ id: x.id, desc: String(x.desc ?? ""), tex: x.tex }));
 
   FORMULAS = formulas;
+  rebuildMap();
   saveStore();
 
   excluded = new Set(Array.isArray(data.excluded) ? data.excluded.filter(x => typeof x === "string") : []);
@@ -384,31 +419,39 @@ function isClickOnUI(target) {
   );
 }
 
-// ===== 화면 탭 → 다음 공식 (중복 방지: 터치/펜은 pointerup, 마우스는 click) =====
+// 화면 탭 → 다음 공식 (중복 방지: 터치/펜은 pointerup, 마우스는 click)
 let lastAdvanceAt = 0;
-
 function tryAdvance(e) {
   if (isClickOnUI(e.target)) return;
 
   const now = Date.now();
-  if (now - lastAdvanceAt < 1200) return; // 길게 눌렀을 때 늦은 click까지 확실히 차단
+  if (now - lastAdvanceAt < 1200) return; // 길게 눌렀을 때 늦게 오는 합성 click까지 차단
   lastAdvanceAt = now;
 
   showRandomNext();
 }
 
-// 터치/펜 전용
 el.stage.addEventListener("pointerup", (e) => {
   if (e.pointerType === "mouse") return;
   e.preventDefault();
   tryAdvance(e);
 }, { passive: false });
 
-// 마우스 전용
 el.stage.addEventListener("click", (e) => {
-  // 터치에서 합성 click이 와도, 위 lastAdvanceAt 가 막아줌
   tryAdvance(e);
 });
+
+// iOS 더블탭 줌 방지 (문서 전체 말고 stage만)
+let lastStageTouchEnd = 0;
+el.stage.addEventListener("touchend", (e) => {
+  const now = Date.now();
+  if (now - lastStageTouchEnd <= 300) e.preventDefault();
+  lastStageTouchEnd = now;
+}, { passive: false });
+
+// 일부 iOS에서 핀치 시작 이벤트가 document로만 뜰 때가 있는데,
+// stage 범위에서도 막아보고(안 뜨면 무시됨)
+el.stage.addEventListener("gesturestart", (e) => e.preventDefault());
 
 // 상단 버튼
 el.btnExclude.addEventListener("click", (e) => {
@@ -416,7 +459,10 @@ el.btnExclude.addEventListener("click", (e) => {
   if (!currentId) return;
   excluded.add(currentId);
   saveExcluded();
+
+  // 풀 변경 지점 → 덱 재구성
   rebuildDeck();
+
   setCounts();
   renderGrids();
   showRandomNext();
@@ -471,7 +517,11 @@ el.btnSave.addEventListener("click", () => {
 
   const item = { id: newId(), desc, tex };
   FORMULAS.push(item);
+  rebuildMap();
   saveStore();
+
+  // 풀 변경 지점 → 덱 재구성
+  rebuildDeck();
 
   setCounts();
   renderGrids();
@@ -482,15 +532,6 @@ el.btnSave.addEventListener("click", () => {
 el.btnCancel.addEventListener("click", closeModal);
 el.modal.addEventListener("click", (e) => { if (e.target === el.modal) closeModal(); });
 
-// iOS 더블탭 줌 방지
-let lastTouchEnd = 0;
-document.addEventListener("touchend", (e) => {
-  const now = Date.now();
-  if (now - lastTouchEnd <= 300) e.preventDefault();
-  lastTouchEnd = now;
-}, { passive: false });
-document.addEventListener("gesturestart", (e) => e.preventDefault());
-
 // ===== 초기 샘플 =====
 function ensureSeed() {
   if (FORMULAS.length > 0) return;
@@ -498,6 +539,7 @@ function ensureSeed() {
     { id: newId(), desc: "유효전력", tex: String.raw`P = VI\cos\theta` },
     { id: newId(), desc: "무효전력", tex: String.raw`Q = VI\sin\theta` },
   ];
+  rebuildMap();
   saveStore();
 }
 
@@ -505,13 +547,15 @@ function ensureSeed() {
 function init() {
   ensureSeed();
 
+  // 맵/정합성
+  rebuildMap();
   const ids = new Set(FORMULAS.map(f => f.id));
   excluded = new Set([...excluded].filter(id => ids.has(id)));
   saveExcluded();
 
   const v = document.querySelector('meta[name="app-version"]')?.content || "v?";
-el.panelFooter.textContent = `버전: ${v}`;
-  
+  el.panelFooter.textContent = `버전: ${v}`;
+
   setCounts();
   renderGrids();
   rebuildDeck();
