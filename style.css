@@ -95,11 +95,11 @@ body{
 
 .filename{
   position:absolute;
-  bottom:10px;
+  bottom:30px;
   left:50%;
   transform:translateX(-50%);
   color:var(--muted);
-  font-size:12px;
+  font-size:16px;
 }
 
 /* 패널 */
