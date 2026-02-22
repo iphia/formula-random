@@ -92,6 +92,32 @@ function setCounts() {
   el.unlearnedCount.textContent = String(availableFormulas().length);
   el.excludedCount.textContent = String(excluded.size);
 }
+function deleteFormula(id) {
+  const idx = FORMULAS.findIndex(f => f.id === id);
+  if (idx === -1) return;
+
+  FORMULAS.splice(idx, 1);
+  saveStore();
+
+  excluded.delete(id);
+  saveExcluded();
+
+  // 지금 보고 있는 게 삭제됐으면 다음으로
+  if (currentId === id) {
+    currentId = null;
+    showRandomNext();
+  }
+
+  setCounts();
+  renderGrids();
+}
+
+function confirmDelete(item) {
+  const name = item.desc ? `“${item.desc}”` : "(설명 없음)";
+  const ok = confirm(`${name}\n이 공식을 삭제할까?\n(삭제하면 복원은 백업 파일로만 가능)`);
+  if (!ok) return;
+  deleteFormula(item.id);
+}
 
 // ===== KaTeX 렌더 =====
 function renderKatexInto(node, tex, { displayMode = true } = {}) {
@@ -187,8 +213,37 @@ function makeThumb(item, mode) {
       showFormula(item.id);
     }
   };
+  // 길게 누르면 삭제 (모바일/데스크탑 둘 다)
+let pressTimer = null;
+let longPressed = false;
 
-  wrap.addEventListener("click", (e) => { e.stopPropagation(); action(); });
+const startPress = () => {
+  longPressed = false;
+  pressTimer = setTimeout(() => {
+    longPressed = true;
+    confirmDelete(item);
+  }, 550); // 0.55초 롱프레스
+};
+
+const cancelPress = () => {
+  if (pressTimer) clearTimeout(pressTimer);
+  pressTimer = null;
+};
+
+wrap.addEventListener("pointerdown", (e) => {
+  // 스크롤 중 오작동 줄이려고 좌클릭/터치만
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+  startPress();
+});
+
+wrap.addEventListener("pointerup", cancelPress);
+wrap.addEventListener("pointercancel", cancelPress);
+wrap.addEventListener("pointerleave", cancelPress);
+  wrap.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (longPressed) return; // 롱프레스 삭제 후 클릭 동작 방지
+  action();
+});
   wrap.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
