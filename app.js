@@ -425,18 +425,6 @@ el.stage.addEventListener("pointerdown", (e) => {
   showRandomNext();
 }, { passive: false });
 
-// iOS 더블탭 줌 방지 (문서 전체 말고 stage만)
-let lastStageTouchEnd = 0;
-el.stage.addEventListener("touchend", (e) => {
-  const now = Date.now();
-  if (now - lastStageTouchEnd <= 300) e.preventDefault();
-  lastStageTouchEnd = now;
-}, { passive: false });
-
-// 일부 iOS에서 핀치 시작 이벤트가 document로만 뜰 때가 있는데,
-// stage 범위에서도 막아보고(안 뜨면 무시됨)
-el.stage.addEventListener("gesturestart", (e) => e.preventDefault());
-
 // 상단 버튼
 el.btnExclude.addEventListener("click", (e) => {
   e.stopPropagation();
