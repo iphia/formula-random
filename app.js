@@ -418,28 +418,12 @@ function isClickOnUI(target) {
     target.closest(".modal")
   );
 }
-
-// 화면 탭 → 다음 공식 (중복 방지: 터치/펜은 pointerup, 마우스는 click)
-let lastAdvanceAt = 0;
-function tryAdvance(e) {
+//
+el.stage.addEventListener("pointerdown", (e) => {
   if (isClickOnUI(e.target)) return;
-
-  const now = Date.now();
-  if (now - lastAdvanceAt < 300) return; // 길게 눌렀을 때 늦게 오는 합성 click까지 차단
-  lastAdvanceAt = now;
-
-  showRandomNext();
-}
-
-el.stage.addEventListener("pointerup", (e) => {
-  if (e.pointerType === "mouse") return;
   e.preventDefault();
-  tryAdvance(e);
+  showRandomNext();
 }, { passive: false });
-
-el.stage.addEventListener("click", (e) => {
-  tryAdvance(e);
-});
 
 // iOS 더블탭 줌 방지 (문서 전체 말고 stage만)
 let lastStageTouchEnd = 0;
