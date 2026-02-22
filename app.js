@@ -437,18 +437,45 @@ function isClickOnUI(target) {
     target.closest(".modal")
   );
 }
-//
+////////
+let stagePointerActive = false;
+let stageStartX = 0;
+let stageStartY = 0;
+
 el.stage.addEventListener("pointerdown", (e) => {
-  if (isClickOnUI(e.target)) return;
+  // 왼쪽/오른쪽 패널 영역에서 시작한 터치는 무시 (기존 로직 있으면 유지)
+  stagePointerActive = true;
+  stageStartX = e.clientX;
+  stageStartY = e.clientY;
+
+  // iOS에서 길게 누르다 떼는 동작 안정화에 도움
+  try { el.stage.setPointerCapture(e.pointerId); } catch (_) {}
+
   e.preventDefault();
-  // 1) 설명 화면이면 → 같은 카드의 공식을 보여줌
-  // 2) 공식 화면이면 → 다음 카드(설명부터)
+}, { passive: false });
+
+el.stage.addEventListener("pointerup", (e) => {
+  if (!stagePointerActive) return;
+  stagePointerActive = false;
+
+  const dx = e.clientX - stageStartX;
+  const dy = e.clientY - stageStartY;
+  const moved = Math.hypot(dx, dy) > 12; // 12px 이상 움직였으면 탭으로 안 봄
+  if (moved) return;
+
+  // ✅ 여기서 “설명→공식→다음” 동작 실행
   if (currentId && stageView === "desc") {
     showFormula(currentId);
   } else {
     showRandomNext();
   }
+
+  e.preventDefault();
 }, { passive: false });
+
+el.stage.addEventListener("pointercancel", () => {
+  stagePointerActive = false;
+});
 
 // 상단 버튼
 el.btnExclude.addEventListener("click", (e) => {
