@@ -384,20 +384,30 @@ function isClickOnUI(target) {
   );
 }
 
-// 화면 탭 → 다음 공식 (touch와 click 중복 호출 방지)
-let ignoreClickUntil = 0;
+// ===== 화면 탭 → 다음 공식 (중복 방지: 터치/펜은 pointerup, 마우스는 click) =====
+let lastAdvanceAt = 0;
 
-el.stage.addEventListener("touchend", (e) => {
+function tryAdvance(e) {
   if (isClickOnUI(e.target)) return;
-  e.preventDefault();
-  ignoreClickUntil = Date.now() + 600; // 이후 0.6초 동안 click 무시
+
+  const now = Date.now();
+  if (now - lastAdvanceAt < 1200) return; // 길게 눌렀을 때 늦은 click까지 확실히 차단
+  lastAdvanceAt = now;
+
   showRandomNext();
+}
+
+// 터치/펜 전용
+el.stage.addEventListener("pointerup", (e) => {
+  if (e.pointerType === "mouse") return;
+  e.preventDefault();
+  tryAdvance(e);
 }, { passive: false });
 
+// 마우스 전용
 el.stage.addEventListener("click", (e) => {
-  if (Date.now() < ignoreClickUntil) return;
-  if (isClickOnUI(e.target)) return;
-  showRandomNext();
+  // 터치에서 합성 click이 와도, 위 lastAdvanceAt 가 막아줌
+  tryAdvance(e);
 });
 
 // 상단 버튼
