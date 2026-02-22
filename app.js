@@ -39,8 +39,8 @@ const el = {
 };
 
 // ===== 상태 =====
-let FORMULAS = loadStore();             // [{id, desc, tex}]
-let excluded = loadExcluded();          // Set(ids)
+let FORMULAS = loadStore();        // [{id, desc, tex}]
+let excluded = loadExcluded();     // Set(ids)
 let currentId = null;
 
 // ===== 저장/로드 =====
@@ -92,32 +92,6 @@ function setCounts() {
   el.unlearnedCount.textContent = String(availableFormulas().length);
   el.excludedCount.textContent = String(excluded.size);
 }
-function deleteFormula(id) {
-  const idx = FORMULAS.findIndex(f => f.id === id);
-  if (idx === -1) return;
-
-  FORMULAS.splice(idx, 1);
-  saveStore();
-
-  excluded.delete(id);
-  saveExcluded();
-
-  // 지금 보고 있는 게 삭제됐으면 다음으로
-  if (currentId === id) {
-    currentId = null;
-    showRandomNext();
-  }
-
-  setCounts();
-  renderGrids();
-}
-
-function confirmDelete(item) {
-  const name = item.desc ? `“${item.desc}”` : "(설명 없음)";
-  const ok = confirm(`${name}\n이 공식을 삭제할까?\n(삭제하면 복원은 백업 파일로만 가능)`);
-  if (!ok) return;
-  deleteFormula(item.id);
-}
 
 // ===== KaTeX 렌더 =====
 function renderKatexInto(node, tex, { displayMode = true } = {}) {
@@ -163,10 +137,8 @@ function showFormula(id) {
   const item = byId(id);
   if (!item) return;
   currentId = item.id;
-
   renderKatexInto(el.formulaBox, item.tex, { displayMode: true });
   el.filename.textContent = item.desc || "";
-
   closeBothPanels();
 }
 function showRandomNext() {
@@ -182,6 +154,33 @@ function showRandomNext() {
     pick = shufflePick(pool.filter(x => x.id !== currentId));
   }
   showFormula(pick.id);
+}
+
+// ===== 삭제 =====
+function deleteFormula(id) {
+  const idx = FORMULAS.findIndex(f => f.id === id);
+  if (idx === -1) return;
+
+  FORMULAS.splice(idx, 1);
+  saveStore();
+
+  excluded.delete(id);
+  saveExcluded();
+
+  if (currentId === id) {
+    currentId = null;
+  }
+
+  setCounts();
+  renderGrids();
+  if (!currentId) showRandomNext();
+}
+
+function confirmDelete(item) {
+  const name = item.desc ? `“${item.desc}”` : "(설명 없음)";
+  const ok = confirm(`${name}\n이 공식을 삭제할까?\n(삭제하면 백업 파일로만 복구 가능)`);
+  if (!ok) return;
+  deleteFormula(item.id);
 }
 
 // ===== 그리드 =====
@@ -205,7 +204,6 @@ function makeThumb(item, mode) {
     if (mode === "view") {
       showFormula(item.id);
     } else {
-      // include
       excluded.delete(item.id);
       saveExcluded();
       setCounts();
@@ -213,37 +211,37 @@ function makeThumb(item, mode) {
       showFormula(item.id);
     }
   };
-  // 길게 누르면 삭제 (모바일/데스크탑 둘 다)
-let pressTimer = null;
-let longPressed = false;
 
-const startPress = () => {
-  longPressed = false;
-  pressTimer = setTimeout(() => {
-    longPressed = true;
-    confirmDelete(item);
-  }, 550); // 0.55초 롱프레스
-};
+  // 롱프레스(길게 누름)로 삭제
+  let pressTimer = null;
+  let longPressed = false;
 
-const cancelPress = () => {
-  if (pressTimer) clearTimeout(pressTimer);
-  pressTimer = null;
-};
+  const startPress = () => {
+    longPressed = false;
+    pressTimer = setTimeout(() => {
+      longPressed = true;
+      confirmDelete(item);
+    }, 550);
+  };
+  const cancelPress = () => {
+    if (pressTimer) clearTimeout(pressTimer);
+    pressTimer = null;
+  };
 
-wrap.addEventListener("pointerdown", (e) => {
-  // 스크롤 중 오작동 줄이려고 좌클릭/터치만
-  if (e.pointerType === "mouse" && e.button !== 0) return;
-  startPress();
-});
+  wrap.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    startPress();
+  });
+  wrap.addEventListener("pointerup", cancelPress);
+  wrap.addEventListener("pointercancel", cancelPress);
+  wrap.addEventListener("pointerleave", cancelPress);
 
-wrap.addEventListener("pointerup", cancelPress);
-wrap.addEventListener("pointercancel", cancelPress);
-wrap.addEventListener("pointerleave", cancelPress);
   wrap.addEventListener("click", (e) => {
-  e.stopPropagation();
-  if (longPressed) return; // 롱프레스 삭제 후 클릭 동작 방지
-  action();
-});
+    e.stopPropagation();
+    if (longPressed) return;
+    action();
+  });
+
   wrap.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -254,6 +252,7 @@ wrap.addEventListener("pointerleave", cancelPress);
 
   return wrap;
 }
+
 function renderGrids() {
   el.gridUnlearned.innerHTML = "";
   availableFormulas().forEach(item => el.gridUnlearned.appendChild(makeThumb(item, "view")));
@@ -318,7 +317,7 @@ async function restoreFromFile(file) {
   excluded = new Set(Array.isArray(data.excluded) ? data.excluded.filter(x => typeof x === "string") : []);
   saveExcluded();
 
-  init(); // 화면 갱신
+  init();
 }
 
 // ===== 이벤트 =====
@@ -340,6 +339,7 @@ el.stage.addEventListener("touchend", (e) => {
   e.preventDefault();
   showRandomNext();
 }, { passive: false });
+
 el.stage.addEventListener("click", (e) => {
   if (isClickOnUI(e.target)) return;
   showRandomNext();
@@ -355,8 +355,17 @@ el.btnExclude.addEventListener("click", (e) => {
   renderGrids();
   showRandomNext();
 });
-el.btnUnlearned.addEventListener("click", (e) => { e.stopPropagation(); renderGrids(); openPanel("left"); });
-el.btnExcluded.addEventListener("click", (e) => { e.stopPropagation(); renderGrids(); openPanel("right"); });
+
+el.btnUnlearned.addEventListener("click", (e) => {
+  e.stopPropagation();
+  renderGrids();
+  openPanel("left");
+});
+el.btnExcluded.addEventListener("click", (e) => {
+  e.stopPropagation();
+  renderGrids();
+  openPanel("right");
+});
 el.closeUnlearned.addEventListener("click", (e) => { e.stopPropagation(); closePanel("left"); });
 el.closeExcluded.addEventListener("click", (e) => { e.stopPropagation(); closePanel("right"); });
 
@@ -368,6 +377,7 @@ el.sheet.addEventListener("click", (e) => { if (e.target === el.sheet) closeShee
 // 메뉴 항목
 el.btnAdd.addEventListener("click", () => { closeSheet(); openModal(); });
 el.btnBackup.addEventListener("click", () => { closeSheet(); downloadBackup(); });
+
 el.fileRestore.addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   e.target.value = "";
@@ -387,6 +397,7 @@ el.btnPreview.addEventListener("click", () => {
   if (!tex) return;
   renderKatexInto(el.preview, tex, { displayMode: true });
 });
+
 el.btnSave.addEventListener("click", () => {
   const tex = el.inpTex.value.trim();
   const desc = el.inpDesc.value.trim();
@@ -401,6 +412,7 @@ el.btnSave.addEventListener("click", () => {
   showFormula(item.id);
   closeModal();
 });
+
 el.btnCancel.addEventListener("click", closeModal);
 el.modal.addEventListener("click", (e) => { if (e.target === el.modal) closeModal(); });
 
@@ -413,7 +425,7 @@ document.addEventListener("touchend", (e) => {
 }, { passive: false });
 document.addEventListener("gesturestart", (e) => e.preventDefault());
 
-// ===== 초기 샘플(처음 실행 편의) =====
+// ===== 초기 샘플 =====
 function ensureSeed() {
   if (FORMULAS.length > 0) return;
   FORMULAS = [
@@ -427,7 +439,6 @@ function ensureSeed() {
 function init() {
   ensureSeed();
 
-  // excluded 정리(없는 id 제거)
   const ids = new Set(FORMULAS.map(f => f.id));
   excluded = new Set([...excluded].filter(id => ids.has(id)));
   saveExcluded();
