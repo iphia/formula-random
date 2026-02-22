@@ -4,6 +4,30 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>공식 랜덤 암기 (LaTeX)</title>
+  <script>
+(async () => {
+  try {
+    const res = await fetch("./version.json", { cache: "no-store" });
+    if (!res.ok) return;
+    const data = await res.json();
+    const v = String(data?.v ?? "");
+    if (!v) return;
+
+    const key = "app_version_v1";
+    const saved = localStorage.getItem(key);
+
+    const url = new URL(location.href);
+    const cur = url.searchParams.get("v");
+
+    // 저장된 버전 or URL 버전이 다르면 최신으로 강제 이동
+    if (saved !== v || cur !== v) {
+      localStorage.setItem(key, v);
+      url.searchParams.set("v", v);
+      location.replace(url.toString());
+    }
+  } catch {}
+})();
+</script>
   <link rel="stylesheet" href="style.css" />
   <link rel="apple-touch-icon" href="red-apple-touch-icon.png">
 
