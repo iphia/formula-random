@@ -377,19 +377,6 @@ body{
   z-index: 2;
 }
 
-#deckProgressMeta{
-  position: absolute;
-  left: 14px;
-  bottom: 22px; /* 진행률바(bottom:10px, height:6px) 기준으로 위쪽 */
-  font-size: 11px;
-  line-height: 1;
-  color: var(--muted);
-  opacity: 0.9;
-  pointer-events: none;
-  user-select: none;
-  z-index: 2;
-}
-
 #deckProgressFill{
   width: 0%;
   height: 100%;
