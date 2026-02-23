@@ -342,6 +342,22 @@ body{
   font-size: 12px;
 }
 
+.excludedSectionTitle{
+  margin: 8px 0 6px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.excludedSectionList{
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
 @media (max-width: 380px){
   .topbtn{ font-size:13px; padding:0 10px; }
   .formulaBox{ font-size:22px; }
