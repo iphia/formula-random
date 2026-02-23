@@ -3,7 +3,7 @@ const STORE_KEY = "latex_formulas_store_v1";
 const EXCLUDE_KEY = "latex_formulas_excluded_v1";
 
 const STATS_KEY = "latex_formulas_stats_v1"; // 맞춘 횟수 저장
-const AUTO_EXCLUDE_AFTER = 3;                // n번 이상 맞추면 자동 제외 (원하는 숫자로)
+const AUTO_EXCLUDE_AFTER = 10;                // n번 이상 맞추면 자동 제외 (원하는 숫자로)
 
 // ===== DOM =====
 const el = {
