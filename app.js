@@ -9,6 +9,7 @@ const AUTO_EXCLUDE_AFTER = 5;                // n번 이상 맞추면 자동 제
 const AUTO_EXCLUDED_KEY = "latex_formulas_auto_excluded_v1";
 const DECK_CYCLES_KEY = "latex_formulas_deck_cycles_v1";
 const DECAY_EVERY_CYCLES = 10;
+const MEMORY_META_KEY = "latex_formulas_memory_meta_v1"; // 개별 감쇠 기준 시점
 
 const STAGE_STATE_KEY = "latex_formulas_stage_state_v1"; // 현재 보고 있던 카드/화면 상태
 
@@ -57,6 +58,7 @@ let excluded = loadExcluded();     // Set(ids)
 let stats = loadStats();           // { [id]: number }
 let autoExcluded = loadAutoExcluded(); // Set(ids) 자동 제외로 들어간 항목
 let deckCycles = loadDeckCycles();     // 덱 완주 누적 횟수
+let memoryMeta = loadMemoryMeta();       // { [id]: { excludedAtCycle, lastDecayCycle } }
 let currentId = null;
 // 스테이지 표시 상태: "desc"(설명) → "formula"(공식)
 let stageView = "desc";
@@ -226,6 +228,36 @@ function saveDeckCycles() {
   } catch {}
 }
 
+function loadMemoryMeta() {
+  try {
+    const raw = localStorage.getItem(MEMORY_META_KEY);
+    if (!raw) return {};
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== "object") return {};
+    const out = {};
+    for (const [id, meta] of Object.entries(obj)) {
+      if (!meta || typeof meta !== "object") continue;
+      const excludedAtCycle = Number(meta.excludedAtCycle);
+      const lastDecayCycle = Number(meta.lastDecayCycle);
+      out[id] = {};
+      if (Number.isFinite(excludedAtCycle) && excludedAtCycle >= 0) {
+        out[id].excludedAtCycle = Math.floor(excludedAtCycle);
+      }
+      if (Number.isFinite(lastDecayCycle) && lastDecayCycle >= 0) {
+        out[id].lastDecayCycle = Math.floor(lastDecayCycle);
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+function saveMemoryMeta() {
+  try {
+    localStorage.setItem(MEMORY_META_KEY, JSON.stringify(memoryMeta));
+  } catch {}
+}
+
 function loadStats() {
   try {
     const raw = localStorage.getItem(STATS_KEY);
@@ -240,15 +272,26 @@ function loadStats() {
     return {};
   }
 }
+
 function excludeNow(id, { manual = false } = {}) {
   excluded.add(id);
+
   if (manual) {
+    // 수동 제외는 자동 감쇠/자동 재포함 대상에서 제외
     autoExcluded.delete(id);
+    if (memoryMeta[id]) delete memoryMeta[id];
     saveAutoExcluded();
+    saveMemoryMeta();
   } else {
+    // 자동 제외는 개별 감쇠 기준 시점 기록
     autoExcluded.add(id);
+    if (!memoryMeta[id] || typeof memoryMeta[id] !== "object") memoryMeta[id] = {};
+    memoryMeta[id].excludedAtCycle = deckCycles;
+    memoryMeta[id].lastDecayCycle = deckCycles;
     saveAutoExcluded();
+    saveMemoryMeta();
   }
+
   saveExcluded();
 
   rebuildDeck();
@@ -257,25 +300,64 @@ function excludeNow(id, { manual = false } = {}) {
   showRandomNext();
 }
 
-function decayCorrectCountsAndReinclude() {
+function runPerItemDecayAndReinclude() {
   let changed = false;
+  let metaChanged = false;
 
-  for (const id of Object.keys(stats)) {
+  for (const id of [...autoExcluded]) {
     const n = Number(stats[id]) || 0;
-    const next = Math.max(0, n - 1);
+
+    // 이미 기준 미만이면 즉시 재포함(안전장치)
+    if (n < AUTO_EXCLUDE_AFTER) {
+      excluded.delete(id);
+      autoExcluded.delete(id);
+      if (memoryMeta[id]) {
+        delete memoryMeta[id];
+        metaChanged = true;
+      }
+      changed = true;
+      continue;
+    }
+
+    let meta = memoryMeta[id];
+    if (!meta || typeof meta !== "object") {
+      // 기존 데이터 호환: 지금 시점을 기준으로 초기화 (보수적)
+      memoryMeta[id] = { excludedAtCycle: deckCycles, lastDecayCycle: deckCycles };
+      metaChanged = true;
+      continue;
+    }
+
+    const excludedAt = Number.isFinite(Number(meta.excludedAtCycle))
+      ? Math.floor(Number(meta.excludedAtCycle))
+      : deckCycles;
+
+    const base = Number.isFinite(Number(meta.lastDecayCycle))
+      ? Math.floor(Number(meta.lastDecayCycle))
+      : excludedAt;
+
+    const elapsed = deckCycles - base;
+    if (elapsed < DECAY_EVERY_CYCLES) continue;
+
+    const steps = Math.floor(elapsed / DECAY_EVERY_CYCLES);
+    if (steps <= 0) continue;
+
+    const next = Math.max(0, n - steps);
     if (next !== n) {
       stats[id] = next;
       changed = true;
     }
-  }
 
-  // 자동 제외된 항목만 기준 미만이면 다시 포함
-  for (const id of [...autoExcluded]) {
-    const n = Number(stats[id]) || 0;
-    if (n < AUTO_EXCLUDE_AFTER) {
+    meta.lastDecayCycle = base + (steps * DECAY_EVERY_CYCLES);
+    if (!Number.isFinite(Number(meta.excludedAtCycle))) meta.excludedAtCycle = excludedAt;
+    metaChanged = true;
+
+    // 자동 제외된 항목만 기준 미만이면 다시 포함
+    if ((Number(stats[id]) || 0) < AUTO_EXCLUDE_AFTER) {
       excluded.delete(id);
       autoExcluded.delete(id);
+      delete memoryMeta[id];
       changed = true;
+      metaChanged = true;
     }
   }
 
@@ -287,6 +369,10 @@ function decayCorrectCountsAndReinclude() {
     setCounts();
     renderGrids();
     updateHint();
+  }
+
+  if (metaChanged) {
+    saveMemoryMeta();
   }
 }
 function saveStats() {
@@ -333,18 +419,9 @@ function setCounts() {
   el.unlearnedCount.textContent = String(availableFormulas().length);
   el.excludedCount.textContent = String(excluded.size);
 }
+
 function ensureDeckProgressBar() {
   if (!el.stage || document.getElementById("deckProgressWrap")) return;
-
-  // 감쇠 카운터 텍스트
-  const meta = document.createElement("div");
-  meta.id = "deckProgressMeta";
-
-  const txt = document.createElement("span");
-  txt.id = "deckDecayText";
-  txt.textContent = "감쇠까지 -바퀴";
-
-  meta.appendChild(txt);
 
   const wrap = document.createElement("div");
   wrap.id = "deckProgressWrap";
@@ -353,8 +430,6 @@ function ensureDeckProgressBar() {
   fill.id = "deckProgressFill";
 
   wrap.appendChild(fill);
-
-  el.stage.appendChild(meta);
   el.stage.appendChild(wrap);
 }
 
@@ -368,18 +443,8 @@ function updateDeckProgressBar() {
 
   fill.style.width = `${ratio * 100}%`;
 
-  updateDecayCounterText();
 }
 
-function updateDecayCounterText() {
-  const node = document.getElementById("deckDecayText");
-  if (!node) return;
-
-  const mod = deckCycles % DECAY_EVERY_CYCLES;
-  const left = mod === 0 ? DECAY_EVERY_CYCLES : (DECAY_EVERY_CYCLES - mod);
-
-  node.textContent = `감쇠까지 ${left}바퀴`;
-}
 
 // ===== 덱 =====
 function rebuildDeck() {
@@ -413,10 +478,8 @@ function nextFromDeck() {
     deckCycles += 1;
     saveDeckCycles();
 
-    // DECAY_EVERY_CYCLES(예: 10) 바퀴마다 맞춘 횟수 감쇠
-    if (deckCycles > 0 && deckCycles % DECAY_EVERY_CYCLES === 0) {
-      decayCorrectCountsAndReinclude();
-    }
+    // 개별 감쇠/재포함 검사 (각 공식의 제외 시점 기준)
+    runPerItemDecayAndReinclude();
 
     // 감쇠/재포함으로 풀 구성이 바뀔 수 있으니 새 덱 구성
     rebuildDeck();
@@ -547,8 +610,10 @@ function deleteFormula(id) {
 
   excluded.delete(id);
   autoExcluded.delete(id);
+  if (memoryMeta[id]) delete memoryMeta[id];
   saveExcluded();
   saveAutoExcluded();
+  saveMemoryMeta();
 
   if (currentId === id) currentId = null;
 
@@ -592,8 +657,10 @@ function makeThumb(item, mode) {
   // 제외 해제(직접 다시 넣기)
   excluded.delete(item.id);
   autoExcluded.delete(item.id); // 수동 재포함이면 자동제외 상태도 같이 해제해두는 게 깔끔함
+  if (memoryMeta[item.id]) delete memoryMeta[item.id];
   saveExcluded();
   saveAutoExcluded();
+  saveMemoryMeta();
 
   // 맞춘 횟수 1회 차감 (최소 0)
   const prev = Number(stats[item.id]) || 0;
@@ -736,6 +803,7 @@ function downloadBackup() {
     autoExcluded: [...autoExcluded],
     deckCycles,
     stats,
+    memoryMeta,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -775,6 +843,20 @@ async function restoreFromFile(file) {
     if (typeof stats[k] !== "number" || !isFinite(stats[k])) delete stats[k];
   }
   saveStats();
+
+  // memoryMeta 복원 (없으면 빈 객체)
+  memoryMeta = {};
+  if (data && typeof data.memoryMeta === "object" && data.memoryMeta) {
+    for (const [id, meta] of Object.entries(data.memoryMeta)) {
+      if (!meta || typeof meta !== "object") continue;
+      const ex = Number(meta.excludedAtCycle);
+      const ld = Number(meta.lastDecayCycle);
+      memoryMeta[id] = {};
+      if (Number.isFinite(ex) && ex >= 0) memoryMeta[id].excludedAtCycle = Math.floor(ex);
+      if (Number.isFinite(ld) && ld >= 0) memoryMeta[id].lastDecayCycle = Math.floor(ld);
+    }
+  }
+  saveMemoryMeta();
 
   init();
 }
@@ -961,6 +1043,11 @@ function init() {
     if (!ids.has(k)) delete stats[k];
   }
   saveStats();
+
+  for (const k of Object.keys(memoryMeta)) {
+    if (!ids.has(k) || !autoExcluded.has(k)) delete memoryMeta[k];
+  }
+  saveMemoryMeta();
 
   const v = document.querySelector('meta[name="app-version"]')?.content || "v?";
   el.panelFooter.textContent = `버전: ${v}`;
