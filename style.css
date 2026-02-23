@@ -364,6 +364,19 @@ body{
   grid-column: 1 / -1;   /* ✅ 부모 3열 grid를 전부 차지 */
 }
 
+.deckMeta {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  margin: 0 0 4px 0;   /* 진행률바 위 간격 */
+  padding: 0 2px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: color: rgba(0,0,0,0.45); 
+  user-select: none;
+  pointer-events: none;
+}
+
 #deckProgressWrap{
   position: absolute;
   left: 14px;
