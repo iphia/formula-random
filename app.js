@@ -336,25 +336,14 @@ function setCounts() {
 function ensureDeckProgressBar() {
   if (!el.stage || document.getElementById("deckProgressWrap")) return;
 
-  // 감쇠 카운터 텍스트 (진행률바 위 좌측)
+  // 감쇠 카운터 텍스트
   const meta = document.createElement("div");
   meta.id = "deckProgressMeta";
-  meta.style.cssText = `
-    position: absolute;
-    left: 10px;
-    bottom: 10px;   /* 진행률바가 바닥에 붙어있다는 가정 */
-    transform: translateY(-6px); /* '위'로 살짝 */
-    font-size: 11px;
-    line-height: 1;
-    opacity: 0.65;
-    pointer-events: none;
-    user-select: none;
-    z-index: 5;
-  `;
 
   const txt = document.createElement("span");
   txt.id = "deckDecayText";
   txt.textContent = "감쇠까지 -바퀴";
+
   meta.appendChild(txt);
 
   const wrap = document.createElement("div");
