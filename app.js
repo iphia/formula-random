@@ -10,6 +10,7 @@ const el = {
   stage: document.getElementById("stage"),
   formulaBox: document.getElementById("formulaBox"),
   filename: document.getElementById("filename"),
+  hint: document.querySelector(".hint"),
 
   btnExclude: document.getElementById("btnExclude"),
   btnUnlearned: document.getElementById("btnUnlearned"),
@@ -51,6 +52,7 @@ let currentId = null;
 // 스테이지 표시 상태: "desc"(설명) → "formula"(공식)
 let stageView = "desc";
 
+  updateHint();
 let deck = [];      // 현재 한 바퀴 덱(아이디 배열)
 let deckIndex = 0;  // 다음에 보여줄 위치
 
@@ -127,6 +129,21 @@ function incCorrect(id) {
   stats[id] = (stats[id] ?? 0) + 1;
   saveStats();
   return stats[id];
+}
+
+function getCorrectCount(id) {
+  return (stats && id && typeof stats[id] === "number") ? stats[id] : 0;
+}
+
+function updateHint() {
+  if (!el.hint) return;
+  if (!currentId) {
+    el.hint.textContent = "화면을 누르면 다음 공식";
+    return;
+  }
+  const n = getCorrectCount(currentId);
+  const base = (stageView === "desc") ? "화면을 누르면 공식" : "화면을 누르면 다음 공식";
+  el.hint.innerHTML = `${base}<br><span class="hintSub">(${Math.min(n, AUTO_EXCLUDE_AFTER)}/${AUTO_EXCLUDE_AFTER})</span>`;
 }
 function newId() {
   return "f_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
@@ -239,6 +256,7 @@ function showDesc(id) {
   el.filename.textContent = "";
   stageView = "desc";
 
+  updateHint();
   closeBothPanels();
 }
 
@@ -251,6 +269,7 @@ function showFormula(id) {
   el.filename.textContent = item.desc || "";
   stageView = "formula";
 
+  updateHint();
   closeBothPanels();
 }
 
@@ -262,6 +281,7 @@ function showRandomNext() {
     el.filename.textContent = "";
     currentId = null;
     stageView = "desc";
+  updateHint();
     return;
   }
 
@@ -645,7 +665,6 @@ function init() {
   excluded = new Set([...excluded].filter(id => ids.has(id)));
   saveExcluded();
 
-  // stats 정리(없는 id 제거)
   for (const k of Object.keys(stats)) {
     if (!ids.has(k)) delete stats[k];
   }
