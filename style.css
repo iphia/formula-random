@@ -92,6 +92,7 @@ body{
   transform:translateX(-50%);
   color:var(--muted);
   font-size:13px;
+  text-align: center;
 }
 .hintSub {
   display: block;
