@@ -293,8 +293,7 @@ function excludeNow(id, { manual = false } = {}) {
   }
 
   saveExcluded();
-
-  rebuildDeck();
+  
   setCounts();
   renderGrids();
   showRandomNext();
