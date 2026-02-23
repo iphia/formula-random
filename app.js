@@ -6,8 +6,8 @@ const STATS_KEY = "latex_formulas_stats_v1";
 const AUTO_EXCLUDED_KEY = "latex_formulas_auto_excluded_v1";
 const DECK_CYCLES_KEY = "latex_formulas_deck_cycles_v1";
 
-const AUTO_EXCLUDE_AFTER = 10;
-const DECAY_EVERY_CYCLES = 10;
+const AUTO_EXCLUDE_AFTER = 5;
+const DECAY_EVERY_CYCLES = 5;
 
 // ===== DOM =====
 const el = {
