@@ -587,15 +587,28 @@ function makeThumb(item, mode) {
   const action = () => {
     if (mode === "view") {
       showDesc(item.id);
-    } else {
-      excluded.delete(item.id);
-      saveExcluded();
-    
-      rebuildDeck();
-      setCounts();
-      renderGrids();
-      showDesc(item.id);
-    }
+    // makeThumb(item, mode) 내부 action()
+} else {
+  // 제외 해제(직접 다시 넣기)
+  excluded.delete(item.id);
+  autoExcluded.delete(item.id); // 수동 재포함이면 자동제외 상태도 같이 해제해두는 게 깔끔함
+  saveExcluded();
+  saveAutoExcluded();
+
+  // 맞춘 횟수 1회 차감 (최소 0)
+  const prev = Number(stats[item.id]) || 0;
+  const next = Math.max(0, prev - 1);
+  if (next !== prev) {
+    stats[item.id] = next;
+    saveStats();
+  }
+
+  rebuildDeck();
+  setCounts();
+  renderGrids();
+  updateHint();      // 현재 힌트 숫자 갱신 안정성용(선택이지만 추천)
+  showDesc(item.id);
+}
   };
 
   // 롱프레스(길게 누름)로 삭제 + 드래그/스크롤 시 취소
