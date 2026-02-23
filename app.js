@@ -15,6 +15,8 @@ const el = {
   btnUnlearned: document.getElementById("btnUnlearned"),
   btnExcluded: document.getElementById("btnExcluded"),
 
+  hint: document.querySelector(".hint"),
+
   panelUnlearned: document.getElementById("panelUnlearned"),
   panelExcluded: document.getElementById("panelExcluded"),
   closeUnlearned: document.getElementById("closeUnlearned"),
@@ -320,6 +322,8 @@ function showDesc(id) {
   el.filename.textContent = "";
   stageView = "desc";
 
+  stageView = "desc";
+  updateHint();
   closeBothPanels();
 }
 
@@ -332,7 +336,27 @@ function showFormula(id) {
   el.filename.textContent = item.desc || "";
   stageView = "formula";
 
+  stageView = "formula";
+  updateHint();
   closeBothPanels();
+}
+
+function updateHint() {
+  if (!el.hint) return;
+
+  // 현재 카드 맞춘 횟수
+  const n = currentId ? (Number(stats[currentId]) || 0) : 0;
+
+  // 상태에 따라 문구 변경
+  const mainText = (currentId && stageView === "desc")
+    ? "화면을 누르면 공식"
+    : "화면을 누르면 다음 공식";
+
+  // hint 내부에 서브줄 생성/업데이트
+  el.hint.innerHTML = `
+    ${mainText}
+    <span class="hintSub">(${n}/${AUTO_EXCLUDE_AFTER})</span>
+  `;
 }
 
 function showRandomNext() {
@@ -343,6 +367,7 @@ function showRandomNext() {
     el.filename.textContent = "";
     currentId = null;
     stageView = "desc";
+    updateHint();
     return;
   }
 
@@ -644,7 +669,7 @@ el.btnExclude.addEventListener("click", (e) => {
   if (!currentId) return;
 
   const n = incCorrect(currentId);
-
+  
   if (n >= AUTO_EXCLUDE_AFTER) {
     excludeNow(currentId, { manual: false }); // n번 이상이면 자동 제외
   } else {
