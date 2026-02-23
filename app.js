@@ -6,11 +6,16 @@ const DECK_STATE_KEY = "latex_formulas_deck_state_v1"; // 현재 덱 진행 저�
 const STATS_KEY = "latex_formulas_stats_v1"; // 맞춘 횟수 저장
 const AUTO_EXCLUDE_AFTER = 3;                // n번 이상 맞추면 자동 제외 (원하는 숫자로)
 
+const AUTO_EXCLUDED_KEY = "latex_formulas_auto_excluded_v1";
+const DECK_CYCLES_KEY = "latex_formulas_deck_cycles_v1";
+const DECAY_EVERY_CYCLES = 10;
+
 // ===== DOM =====
 const el = {
   stage: document.getElementById("stage"),
   formulaBox: document.getElementById("formulaBox"),
   filename: document.getElementById("filename"),
+  hint: document.querySelector(".hint"),
 
   btnExclude: document.getElementById("btnExclude"),
   btnUnlearned: document.getElementById("btnUnlearned"),
@@ -378,6 +383,22 @@ function closeBothPanels() {
   closePanel("right");
 }
 
+function updateHint() {
+  if (!el.hint) return;
+
+  const n = currentId ? (Number(stats[currentId]) || 0) : 0;
+
+  const mainText =
+    (currentId && stageView === "desc")
+      ? "화면을 누르면 공식"
+      : "화면을 누르면 다음 공식";
+
+  el.hint.innerHTML = `
+    ${mainText}
+    <span class="hintSub">(${n}/${AUTO_EXCLUDE_AFTER})</span>
+  `;
+}
+
 // ===== 표시 =====
 function showDesc(id) {
   const item = byId(id);
@@ -388,6 +409,7 @@ function showDesc(id) {
   el.formulaBox.textContent = item.desc || "(설명 없음)";
   el.filename.textContent = "";
   stageView = "desc";
+  updateHint();
 
   closeBothPanels();
 }
@@ -400,6 +422,7 @@ function showFormula(id) {
   renderKatexInto(el.formulaBox, item.tex, { displayMode: true });
   el.filename.textContent = item.desc || "";
   stageView = "formula";
+  updateHint();
 
   closeBothPanels();
 }
@@ -412,6 +435,7 @@ function showRandomNext() {
     el.filename.textContent = "";
     currentId = null;
     stageView = "desc";
+    updateHint();
     return;
   }
 
