@@ -2,6 +2,9 @@
 const STORE_KEY = "latex_formulas_store_v1";
 const EXCLUDE_KEY = "latex_formulas_excluded_v1";
 
+const STATS_KEY = "latex_formulas_stats_v1"; // 맞춘 횟수 저장
+const AUTO_EXCLUDE_AFTER = 3;                // n번 이상 맞추면 자동 제외 (원하는 숫자로)
+
 // ===== DOM =====
 const el = {
   stage: document.getElementById("stage"),
@@ -43,6 +46,7 @@ const el = {
 let FORMULAS = loadStore();        // [{id, desc, tex}]
 let FORMULA_MAP = new Map();       // id -> formula (O(1))
 let excluded = loadExcluded();     // Set(ids)
+let stats = loadStats();           // { [id]: number }  ✅ 추가
 let currentId = null;
 // 스테이지 표시 상태: "desc"(설명) → "formula"(공식)
 let stageView = "desc";
@@ -89,6 +93,40 @@ function saveExcluded() {
   } catch {
     // 조용히 실패
   }
+}
+
+function loadStats() {
+  try {
+    const raw = localStorage.getItem(STATS_KEY);
+    if (!raw) return {};
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== "object") return {};
+    for (const k of Object.keys(obj)) {
+      if (typeof obj[k] !== "number" || !isFinite(obj[k])) delete obj[k];
+    }
+    return obj;
+  } catch {
+    return {};
+  }
+}
+function excludeNow(id) {
+  excluded.add(id);
+  saveExcluded();
+
+  rebuildDeck();
+  setCounts();
+  renderGrids();
+  showRandomNext();
+}
+function saveStats() {
+  try {
+    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  } catch {}
+}
+function incCorrect(id) {
+  stats[id] = (stats[id] ?? 0) + 1;
+  saveStats();
+  return stats[id];
 }
 function newId() {
   return "f_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
@@ -284,10 +322,8 @@ function makeThumb(item, mode) {
     } else {
       excluded.delete(item.id);
       saveExcluded();
-
-      // 풀 변경 지점 → 덱 재구성
+    
       rebuildDeck();
-
       setCounts();
       renderGrids();
       showDesc(item.id);
@@ -392,6 +428,7 @@ function downloadBackup() {
     version: 1,
     formulas: FORMULAS,
     excluded: [...excluded],
+    stats,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -421,6 +458,11 @@ async function restoreFromFile(file) {
 
   excluded = new Set(Array.isArray(data.excluded) ? data.excluded.filter(x => typeof x === "string") : []);
   saveExcluded();
+  stats = (data && typeof data.stats === "object" && data.stats) ? data.stats : {};
+  for (const k of Object.keys(stats)) {
+    if (typeof stats[k] !== "number" || !isFinite(stats[k])) delete stats[k];
+  }
+  saveStats();
 
   init();
 }
@@ -478,19 +520,42 @@ el.stage.addEventListener("pointercancel", () => {
 });
 
 // 상단 버튼
+let excludeBtnLongPressed = false;
+let excludeBtnTimer = null;
+const LONGPRESS_MS = 550;
+
 el.btnExclude.addEventListener("click", (e) => {
   e.stopPropagation();
+  if (excludeBtnLongPressed) return; // 길게 눌러서 이미 처리됐으면 클릭 무시
   if (!currentId) return;
-  excluded.add(currentId);
-  saveExcluded();
 
-  // 풀 변경 지점 → 덱 재구성
-  rebuildDeck();
+  const n = incCorrect(currentId);
 
-  setCounts();
-  renderGrids();
-  showRandomNext();
+  if (n >= AUTO_EXCLUDE_AFTER) {
+    excludeNow(currentId); // n번 이상이면 자동 제외
+  } else {
+    showRandomNext();      // 아직이면 다음으로만
+  }
 });
+
+el.btnExclude.addEventListener("pointerdown", (e) => {
+  if (!currentId) return;
+  excludeBtnLongPressed = false;
+
+  excludeBtnTimer = setTimeout(() => {
+    excludeBtnLongPressed = true;
+    excludeNow(currentId); // 길게 누르면 즉시 제외
+  }, LONGPRESS_MS);
+});
+
+function clearExcludeBtnPress() {
+  if (excludeBtnTimer) clearTimeout(excludeBtnTimer);
+  excludeBtnTimer = null;
+}
+
+el.btnExclude.addEventListener("pointerup", clearExcludeBtnPress);
+el.btnExclude.addEventListener("pointercancel", clearExcludeBtnPress);
+el.btnExclude.addEventListener("pointerleave", clearExcludeBtnPress);
 
 el.btnUnlearned.addEventListener("click", (e) => {
   e.stopPropagation();
@@ -579,6 +644,12 @@ function init() {
 
   const v = document.querySelector('meta[name="app-version"]')?.content || "v?";
   el.panelFooter.textContent = `버전: ${v}`;
+
+  const ids = new Set(FORMULAS.map(f => f.id));
+  for (const k of Object.keys(stats)) {
+    if (!ids.has(k)) delete stats[k];
+  }
+  saveStats();
 
   setCounts();
   renderGrids();
