@@ -387,10 +387,12 @@ function nextFromDeck() {
   if (deckIndex >= deck.length) {
     deckCycles += 1;
     saveDeckCycles();
+    updateDecayCounterText();
 
     // DECAY_EVERY_CYCLES(예: 10) 바퀴마다 맞춘 횟수 감쇠
     if (deckCycles > 0 && deckCycles % DECAY_EVERY_CYCLES === 0) {
       decayCorrectCountsAndReinclude();
+      updateDecayCounterText();
     }
 
     // 감쇠/재포함으로 풀 구성이 바뀔 수 있으니 새 덱 구성
@@ -741,6 +743,16 @@ async function restoreFromFile(file) {
   init();
 }
 
+function updateDecayCounterText() {
+  if (!el.decayCounterText) return;
+
+  // DECAY_EVERY_CYCLES가 10이라고 가정
+  const mod = deckCycles % DECAY_EVERY_CYCLES;
+  const left = mod === 0 ? DECAY_EVERY_CYCLES : (DECAY_EVERY_CYCLES - mod);
+
+  el.decayCounterText.textContent = `감쇠까지 ${left}바퀴`;
+}
+
 // ===== 이벤트 =====
 function isClickOnUI(target) {
   return (
@@ -853,6 +865,8 @@ el.sheet.addEventListener("click", (e) => { if (e.target === el.sheet) closeShee
 el.btnAdd.addEventListener("click", () => { closeSheet(); openModal(); });
 el.btnBackup.addEventListener("click", () => { closeSheet(); downloadBackup(); });
 
+el.decayCounterText = document.getElementById("decayCounterText");
+
 el.fileRestore.addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   e.target.value = "";
@@ -931,6 +945,7 @@ function init() {
   renderGrids();
   
   ensureDeckProgressBar();
+  updateDecayCounterText();
   
   if (!restoreDeckStateIfValid()) {
     rebuildDeck();
