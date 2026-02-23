@@ -364,6 +364,27 @@ body{
   grid-column: 1 / -1;   /* ✅ 부모 3열 grid를 전부 차지 */
 }
 
+#deckProgressWrap{
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 10px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.08);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
+}
+
+#deckProgressFill{
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: #22c55e; /* 초록색 */
+  transition: width 160ms ease;
+}
+
 @media (max-width: 380px){
   .topbtn{ font-size:13px; padding:0 10px; }
   .formulaBox{ font-size:22px; }
