@@ -336,12 +336,36 @@ function setCounts() {
 function ensureDeckProgressBar() {
   if (!el.stage || document.getElementById("deckProgressWrap")) return;
 
+  // 감쇠 카운터 텍스트 (진행률바 위 좌측)
+  const meta = document.createElement("div");
+  meta.id = "deckProgressMeta";
+  meta.style.cssText = `
+    position: absolute;
+    left: 10px;
+    bottom: 10px;   /* 진행률바가 바닥에 붙어있다는 가정 */
+    transform: translateY(-6px); /* '위'로 살짝 */
+    font-size: 11px;
+    line-height: 1;
+    opacity: 0.65;
+    pointer-events: none;
+    user-select: none;
+    z-index: 5;
+  `;
+
+  const txt = document.createElement("span");
+  txt.id = "deckDecayText";
+  txt.textContent = "감쇠까지 -바퀴";
+  meta.appendChild(txt);
+
   const wrap = document.createElement("div");
   wrap.id = "deckProgressWrap";
+
   const fill = document.createElement("div");
   fill.id = "deckProgressFill";
 
   wrap.appendChild(fill);
+
+  el.stage.appendChild(meta);
   el.stage.appendChild(wrap);
 }
 
@@ -354,6 +378,18 @@ function updateDeckProgressBar() {
   ratio = Math.max(0, Math.min(1, ratio));
 
   fill.style.width = `${ratio * 100}%`;
+
+  updateDecayCounterText();
+}
+
+function updateDecayCounterText() {
+  const node = document.getElementById("deckDecayText");
+  if (!node) return;
+
+  const mod = deckCycles % DECAY_EVERY_CYCLES;
+  const left = mod === 0 ? DECAY_EVERY_CYCLES : (DECAY_EVERY_CYCLES - mod);
+
+  node.textContent = `감쇠까지 ${left}바퀴`;
 }
 
 // ===== 덱 =====
@@ -387,12 +423,10 @@ function nextFromDeck() {
   if (deckIndex >= deck.length) {
     deckCycles += 1;
     saveDeckCycles();
-    updateDecayCounterText();
 
     // DECAY_EVERY_CYCLES(예: 10) 바퀴마다 맞춘 횟수 감쇠
     if (deckCycles > 0 && deckCycles % DECAY_EVERY_CYCLES === 0) {
       decayCorrectCountsAndReinclude();
-      updateDecayCounterText();
     }
 
     // 감쇠/재포함으로 풀 구성이 바뀔 수 있으니 새 덱 구성
@@ -743,16 +777,6 @@ async function restoreFromFile(file) {
   init();
 }
 
-function updateDecayCounterText() {
-  if (!el.decayCounterText) return;
-
-  // DECAY_EVERY_CYCLES가 10이라고 가정
-  const mod = deckCycles % DECAY_EVERY_CYCLES;
-  const left = mod === 0 ? DECAY_EVERY_CYCLES : (DECAY_EVERY_CYCLES - mod);
-
-  el.decayCounterText.textContent = `감쇠까지 ${left}바퀴`;
-}
-
 // ===== 이벤트 =====
 function isClickOnUI(target) {
   return (
@@ -865,8 +889,6 @@ el.sheet.addEventListener("click", (e) => { if (e.target === el.sheet) closeShee
 el.btnAdd.addEventListener("click", () => { closeSheet(); openModal(); });
 el.btnBackup.addEventListener("click", () => { closeSheet(); downloadBackup(); });
 
-el.decayCounterText = document.getElementById("decayCounterText");
-
 el.fileRestore.addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   e.target.value = "";
@@ -945,7 +967,7 @@ function init() {
   renderGrids();
   
   ensureDeckProgressBar();
-  updateDecayCounterText();
+  updateDeckProgressBar();
   
   if (!restoreDeckStateIfValid()) {
     rebuildDeck();
