@@ -4,11 +4,11 @@ const EXCLUDE_KEY = "latex_formulas_excluded_v1";
 const DECK_STATE_KEY = "latex_formulas_deck_state_v1"; // 현재 덱 진행 저장
 
 const STATS_KEY = "latex_formulas_stats_v1"; // 맞춘 횟수 저장
-const AUTO_EXCLUDE_AFTER = 3;                // n번 이상 맞추면 자동 제외 (원하는 숫자로)
+const AUTO_EXCLUDE_AFTER = 5;                // n번 이상 맞추면 자동 제외 (원하는 숫자로)
 
 const AUTO_EXCLUDED_KEY = "latex_formulas_auto_excluded_v1";
 const DECK_CYCLES_KEY = "latex_formulas_deck_cycles_v1";
-const DECAY_EVERY_CYCLES = 10;
+const DECAY_EVERY_CYCLES = 5;
 
 // ===== DOM =====
 const el = {
@@ -331,16 +331,27 @@ function rebuildDeck() {
 function nextFromDeck() {
   if (deck.length === 0) return null;
 
+  // 한 바퀴 끝났으면 완주 처리
   if (deckIndex >= deck.length) {
-    // 한 바퀴 끝 → 다시 셔플해서 새 바퀴
+    deckCycles += 1;
+    saveDeckCycles();
+
+    // DECAY_EVERY_CYCLES(예: 10) 바퀴마다 맞춘 횟수 감쇠
+    if (deckCycles > 0 && deckCycles % DECAY_EVERY_CYCLES === 0) {
+      decayCorrectCountsAndReinclude();
+    }
+
+    // 감쇠/재포함으로 풀 구성이 바뀔 수 있으니 새 덱 구성
     rebuildDeck();
     if (deck.length === 0) return null;
   }
 
   const id = deck[deckIndex];
   deckIndex += 1;
+
   saveDeckState();
   updateDeckProgressBar();
+
   return id;
 }
 
