@@ -303,6 +303,13 @@ function newId() {
   return "f_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
 }
 
+function updateAnswerButtonVisibility() {
+  if (!el.btnExclude) return;
+  el.btnExclude.style.visibility = (stageView === "formula") ? "visible" : "hidden";
+  // 필요하면 자리까지 없애려면 visibility 대신 display 사용 가능
+  // el.btnExclude.style.display = (stageView === "formula") ? "" : "none";
+}
+
 // ===== 맵 캐시 =====
 function rebuildMap() {
   FORMULA_MAP = new Map(FORMULAS.map(f => [f.id, f]));
@@ -466,6 +473,7 @@ function showDesc(id) {
   el.filename.textContent = "";
   stageView = "desc";
   updateHint();
+  updateAnswerButtonVisibility();
   saveStageState();
   closeBothPanels();
 }
@@ -479,6 +487,7 @@ function showFormula(id) {
   el.filename.textContent = item.desc || "";
   stageView = "formula";
   updateHint();
+  updateAnswerButtonVisibility();
   saveStageState();
   closeBothPanels();
 }
@@ -493,6 +502,7 @@ function showRandomNext() {
     stageView = "desc";
     clearStageState();
     updateHint();
+    updateAnswerButtonVisibility();
     return;
   }
 
