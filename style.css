@@ -353,9 +353,15 @@ body{
 }
 
 .excludedSectionList{
-  display: grid;
-  gap: 8px;
-  margin-bottom: 10px;
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)); /* ✅ 카드 3열 */
+  gap:8px;
+  margin-bottom:10px;
+}
+
+.excludedSectionTitle,
+.excludedSectionList{
+  grid-column: 1 / -1;   /* ✅ 부모 3열 grid를 전부 차지 */
 }
 
 @media (max-width: 380px){
