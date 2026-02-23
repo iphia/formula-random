@@ -10,6 +10,8 @@ const AUTO_EXCLUDED_KEY = "latex_formulas_auto_excluded_v1";
 const DECK_CYCLES_KEY = "latex_formulas_deck_cycles_v1";
 const DECAY_EVERY_CYCLES = 5;
 
+const STAGE_STATE_KEY = "latex_formulas_stage_state_v1"; // 현재 보고 있던 카드/화면 상태
+
 // ===== DOM =====
 const el = {
   stage: document.getElementById("stage"),
@@ -150,6 +152,49 @@ function restoreDeckStateIfValid() {
   }
 }
 
+function saveStageState() {
+  try {
+    const payload = {
+      currentId: currentId || null,
+      stageView: stageView || "desc",
+    };
+    localStorage.setItem(STAGE_STATE_KEY, JSON.stringify(payload));
+  } catch {}
+}
+
+function clearStageState() {
+  try {
+    localStorage.removeItem(STAGE_STATE_KEY);
+  } catch {}
+}
+
+function restoreStageStateIfValid() {
+  try {
+    const raw = localStorage.getItem(STAGE_STATE_KEY);
+    if (!raw) return false;
+
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== "object") return false;
+
+    const id = (typeof data.currentId === "string") ? data.currentId : null;
+    const view = (data.stageView === "formula") ? "formula" : "desc";
+
+    if (!id) return false;
+
+    // 현재 존재하는 카드인지 + 제외되지 않은 카드인지 확인
+    const item = byId(id);
+    if (!item) return false;
+    if (excluded.has(id)) return false; // 제외된 카드는 스테이지 복원 안 함
+
+    // 화면 복원
+    if (view === "formula") showFormula(id);
+    else showDesc(id);
+
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function loadAutoExcluded() {
   try {
@@ -421,7 +466,7 @@ function showDesc(id) {
   el.filename.textContent = "";
   stageView = "desc";
   updateHint();
-
+  saveStageState();
   closeBothPanels();
 }
 
@@ -434,7 +479,7 @@ function showFormula(id) {
   el.filename.textContent = item.desc || "";
   stageView = "formula";
   updateHint();
-
+  saveStageState();
   closeBothPanels();
 }
 
@@ -446,6 +491,7 @@ function showRandomNext() {
     el.filename.textContent = "";
     currentId = null;
     stageView = "desc";
+    clearStageState();
     updateHint();
     return;
   }
@@ -873,15 +919,19 @@ function init() {
 
   setCounts();
   renderGrids();
-
+  
   ensureDeckProgressBar();
+  
   if (!restoreDeckStateIfValid()) {
     rebuildDeck();
   } else {
     updateDeckProgressBar();
   }
-
-  showRandomNext();
+  
+  // ✅ 마지막에 보던 카드/화면 복원 우선
+  if (!restoreStageStateIfValid()) {
+    showRandomNext();
+  }
 }
 
 init();
