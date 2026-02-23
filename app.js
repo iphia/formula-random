@@ -283,7 +283,9 @@ function deleteFormula(id) {
   saveExcluded();
 
   if (currentId === id) currentId = null;
-
+  
+  delete stats[id];
+  saveStats();
   // 풀 변경 지점 → 덱 재구성
   rebuildDeck();
 
@@ -639,17 +641,17 @@ function init() {
   // 맵/정합성
   rebuildMap();
   const ids = new Set(FORMULAS.map(f => f.id));
+
   excluded = new Set([...excluded].filter(id => ids.has(id)));
   saveExcluded();
 
-  const v = document.querySelector('meta[name="app-version"]')?.content || "v?";
-  el.panelFooter.textContent = `버전: ${v}`;
-
-  const ids = new Set(FORMULAS.map(f => f.id));
   for (const k of Object.keys(stats)) {
     if (!ids.has(k)) delete stats[k];
   }
   saveStats();
+
+  const v = document.querySelector('meta[name="app-version"]')?.content || "v?";
+  el.panelFooter.textContent = `버전: ${v}`;
 
   setCounts();
   renderGrids();
