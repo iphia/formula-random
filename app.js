@@ -3,7 +3,9 @@ const STORE_KEY = "latex_formulas_store_v1";
 const EXCLUDE_KEY = "latex_formulas_excluded_v1";
 
 const STATS_KEY = "latex_formulas_stats_v1"; // 맞춘 횟수 저장
-const AUTO_EXCLUDE_AFTER = 10;                // n번 이상 맞추면 자동 제외 (원하는 숫자로)
+const AUTO_EXCLUDED_KEY = "latex_formulas_auto_excluded_v1"; // 자동 제외된 항목
+const AUTO_EXCLUDE_AFTER = 10;
+const DECAY_DECK_CYCLES = 10; // 덱 n바퀴마다 맞춘횟수 -1                // n번 이상 맞추면 자동 제외 (원하는 숫자로)
 
 // ===== DOM =====
 const el = {
@@ -55,6 +57,7 @@ let stageView = "desc";
   updateHint();
 let deck = [];      // 현재 한 바퀴 덱(아이디 배열)
 let deckIndex = 0;  // 다음에 보여줄 위치
+let deckCycles = 0; // 덱이 한 바퀴 도는 횟수 누적
 
 // ===== 저장/로드 =====
 function loadStore() {
@@ -111,9 +114,58 @@ function loadStats() {
     return {};
   }
 }
-function excludeNow(id) {
-  excluded.add(id);
+
+function loadAutoExcluded() {
+  try {
+    const raw = localStorage.getItem(AUTO_EXCLUDED_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return new Set();
+    return new Set(arr.map(String));
+  } catch {
+    return new Set();
+  }
+}
+function saveAutoExcluded() {
+  try {
+    localStorage.setItem(AUTO_EXCLUDED_KEY, JSON.stringify([...autoExcluded]));
+  } catch {}
+}
+
+// 덱이 DECAY_DECK_CYCLES 바퀴 돌 때마다: stats>0이면 -1, 자동제외는 기준 아래로 내려가면 재포함
+function decayCorrectCounts() {
+  // 1) 전부 1씩 감소(0 밑으로는 내리지 않음)
+  for (const id of Object.keys(stats)) {
+    const v = stats[id];
+    if (typeof v !== "number" || !isFinite(v)) { delete stats[id]; continue; }
+    if (v > 0) stats[id] = v - 1;
+  }
+
+  // 2) 자동 제외된 것 중 기준 아래로 내려간 건 다시 포함
+  for (const id of [...autoExcluded]) {
+    const v = stats[id] ?? 0;
+    if (v < AUTO_EXCLUDE_AFTER) {
+      excluded.delete(id);
+      autoExcluded.delete(id);
+    }
+  }
+
+  saveStats();
   saveExcluded();
+  saveAutoExcluded();
+
+  rebuildDeck();
+  setCounts();
+  renderGrids();
+  updateHint(); // (n/10) 표시 갱신용
+}
+
+function excludeNow(id, { auto = false } = {}) {
+  excluded.add(id);
+  if (auto) autoExcluded.add(id);
+
+  saveExcluded();
+  if (auto) saveAutoExcluded();
 
   rebuildDeck();
   setCounts();
@@ -197,6 +249,10 @@ function nextFromDeck() {
 
   if (deckIndex >= deck.length) {
     // 한 바퀴 끝 → 다시 셔플해서 새 바퀴
+    deckCycles += 1;
+    if (deckCycles % DECAY_DECK_CYCLES === 0) {
+      decayCorrectCounts();
+    }
     rebuildDeck();
     if (deck.length === 0) return null;
   }
@@ -451,6 +507,7 @@ function downloadBackup() {
     formulas: FORMULAS,
     excluded: [...excluded],
     stats,
+    autoExcluded: [...autoExcluded],
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -480,6 +537,11 @@ async function restoreFromFile(file) {
 
   excluded = new Set(Array.isArray(data.excluded) ? data.excluded.filter(x => typeof x === "string") : []);
   saveExcluded();
+
+  autoExcluded = new Set(Array.isArray(data.autoExcluded) ? data.autoExcluded.filter(x => typeof x === "string") : []);
+  autoExcluded = new Set([...autoExcluded].filter(id => excluded.has(id)));
+  saveAutoExcluded();
+
   stats = (data && typeof data.stats === "object" && data.stats) ? data.stats : {};
   for (const k of Object.keys(stats)) {
     if (typeof stats[k] !== "number" || !isFinite(stats[k])) delete stats[k];
@@ -554,7 +616,7 @@ el.btnExclude.addEventListener("click", (e) => {
   const n = incCorrect(currentId);
 
   if (n >= AUTO_EXCLUDE_AFTER) {
-    excludeNow(currentId); // n번 이상이면 자동 제외
+    excludeNow(currentId, { auto: true }); // n번 이상이면 자동 제외
   } else {
     showRandomNext();      // 아직이면 다음으로만
   }
@@ -663,7 +725,11 @@ function init() {
   const ids = new Set(FORMULAS.map(f => f.id));
 
   excluded = new Set([...excluded].filter(id => ids.has(id)));
+  autoExcluded = new Set([...autoExcluded].filter(id => ids.has(id)));
+  // 자동 제외는 excluded 안에 있어야 의미가 있으니 교집합으로 정리
+  autoExcluded = new Set([...autoExcluded].filter(id => excluded.has(id)));
   saveExcluded();
+  saveAutoExcluded();
 
   for (const k of Object.keys(stats)) {
     if (!ids.has(k)) delete stats[k];
