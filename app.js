@@ -8,7 +8,7 @@ const AUTO_EXCLUDE_AFTER = 5;                // n번 이상 맞추면 자동 제
 
 const AUTO_EXCLUDED_KEY = "latex_formulas_auto_excluded_v1";
 const DECK_CYCLES_KEY = "latex_formulas_deck_cycles_v1";
-const DECAY_EVERY_CYCLES = 10;
+const DECAY_EVERY_CYCLES = 5;
 const MEMORY_META_KEY = "latex_formulas_memory_meta_v1"; // 개별 감쇠 기준 시점
 
 const STAGE_STATE_KEY = "latex_formulas_stage_state_v1"; // 현재 보고 있던 카드/화면 상태
