@@ -93,6 +93,10 @@ body{
   color:var(--muted);
   font-size:13px;
 }
+.hintSub {
+  display: block;
+  text-align: center;
+}
 
 .formulaBox{
   max-width: calc(100vw - (var(--pad) * 2));
