@@ -3,16 +3,13 @@ const STORE_KEY = "latex_formulas_store_v1";
 const EXCLUDE_KEY = "latex_formulas_excluded_v1";
 
 const STATS_KEY = "latex_formulas_stats_v1"; // 맞춘 횟수 저장
-const AUTO_EXCLUDED_KEY = "latex_formulas_auto_excluded_v1"; // 자동 제외된 항목
-const AUTO_EXCLUDE_AFTER = 10;
-const DECAY_DECK_CYCLES = 10; // 덱 n바퀴마다 맞춘횟수 -1                // n번 이상 맞추면 자동 제외 (원하는 숫자로)
+const AUTO_EXCLUDE_AFTER = 3;                // n번 이상 맞추면 자동 제외 (원하는 숫자로)
 
 // ===== DOM =====
 const el = {
   stage: document.getElementById("stage"),
   formulaBox: document.getElementById("formulaBox"),
   filename: document.getElementById("filename"),
-  hint: document.querySelector(".hint"),
 
   btnExclude: document.getElementById("btnExclude"),
   btnUnlearned: document.getElementById("btnUnlearned"),
@@ -49,15 +46,15 @@ const el = {
 let FORMULAS = loadStore();        // [{id, desc, tex}]
 let FORMULA_MAP = new Map();       // id -> formula (O(1))
 let excluded = loadExcluded();     // Set(ids)
-let stats = loadStats();           // { [id]: number }  ✅ 추가
+let stats = loadStats();           // { [id]: number }
+let autoExcluded = loadAutoExcluded(); // Set(ids) 자동 제외로 들어간 항목
+let deckCycles = loadDeckCycles();     // 덱 완주 누적 횟수
 let currentId = null;
 // 스테이지 표시 상태: "desc"(설명) → "formula"(공식)
 let stageView = "desc";
 
-  updateHint();
 let deck = [];      // 현재 한 바퀴 덱(아이디 배열)
 let deckIndex = 0;  // 다음에 보여줄 위치
-let deckCycles = 0; // 덱이 한 바퀴 도는 횟수 누적
 
 // ===== 저장/로드 =====
 function loadStore() {
@@ -100,6 +97,37 @@ function saveExcluded() {
   }
 }
 
+
+function loadAutoExcluded() {
+  try {
+    const raw = localStorage.getItem(AUTO_EXCLUDED_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return new Set();
+    return new Set(arr.filter(x => typeof x === "string"));
+  } catch {
+    return new Set();
+  }
+}
+function saveAutoExcluded() {
+  try {
+    localStorage.setItem(AUTO_EXCLUDED_KEY, JSON.stringify([...autoExcluded]));
+  } catch {}
+}
+function loadDeckCycles() {
+  try {
+    const n = Number(localStorage.getItem(DECK_CYCLES_KEY));
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+  } catch {
+    return 0;
+  }
+}
+function saveDeckCycles() {
+  try {
+    localStorage.setItem(DECK_CYCLES_KEY, String(deckCycles));
+  } catch {}
+}
+
 function loadStats() {
   try {
     const raw = localStorage.getItem(STATS_KEY);
@@ -114,63 +142,54 @@ function loadStats() {
     return {};
   }
 }
-
-function loadAutoExcluded() {
-  try {
-    const raw = localStorage.getItem(AUTO_EXCLUDED_KEY);
-    if (!raw) return new Set();
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return new Set();
-    return new Set(arr.map(String));
-  } catch {
-    return new Set();
-  }
-}
-function saveAutoExcluded() {
-  try {
-    localStorage.setItem(AUTO_EXCLUDED_KEY, JSON.stringify([...autoExcluded]));
-  } catch {}
-}
-
-// 덱이 DECAY_DECK_CYCLES 바퀴 돌 때마다: stats>0이면 -1, 자동제외는 기준 아래로 내려가면 재포함
-function decayCorrectCounts() {
-  // 1) 전부 1씩 감소(0 밑으로는 내리지 않음)
-  for (const id of Object.keys(stats)) {
-    const v = stats[id];
-    if (typeof v !== "number" || !isFinite(v)) { delete stats[id]; continue; }
-    if (v > 0) stats[id] = v - 1;
-  }
-
-  // 2) 자동 제외된 것 중 기준 아래로 내려간 건 다시 포함
-  for (const id of [...autoExcluded]) {
-    const v = stats[id] ?? 0;
-    if (v < AUTO_EXCLUDE_AFTER) {
-      excluded.delete(id);
-      autoExcluded.delete(id);
-    }
-  }
-
-  saveStats();
-  saveExcluded();
-  saveAutoExcluded();
-
-  rebuildDeck();
-  setCounts();
-  renderGrids();
-  updateHint(); // (n/10) 표시 갱신용
-}
-
-function excludeNow(id, { auto = false } = {}) {
+function excludeNow(id, { manual = false } = {}) {
   excluded.add(id);
-  if (auto) autoExcluded.add(id);
-
+  if (manual) {
+    autoExcluded.delete(id);
+    saveAutoExcluded();
+  } else {
+    autoExcluded.add(id);
+    saveAutoExcluded();
+  }
   saveExcluded();
-  if (auto) saveAutoExcluded();
 
   rebuildDeck();
   setCounts();
   renderGrids();
   showRandomNext();
+}
+
+function decayCorrectCountsAndReinclude() {
+  let changed = false;
+
+  for (const id of Object.keys(stats)) {
+    const n = Number(stats[id]) || 0;
+    const next = Math.max(0, n - 1);
+    if (next !== n) {
+      stats[id] = next;
+      changed = true;
+    }
+  }
+
+  // 자동 제외된 항목만 기준 미만이면 다시 포함
+  for (const id of [...autoExcluded]) {
+    const n = Number(stats[id]) || 0;
+    if (n < AUTO_EXCLUDE_AFTER) {
+      excluded.delete(id);
+      autoExcluded.delete(id);
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    saveStats();
+    saveExcluded();
+    saveAutoExcluded();
+    rebuildDeck();
+    setCounts();
+    renderGrids();
+    updateHint();
+  }
 }
 function saveStats() {
   try {
@@ -181,21 +200,6 @@ function incCorrect(id) {
   stats[id] = (stats[id] ?? 0) + 1;
   saveStats();
   return stats[id];
-}
-
-function getCorrectCount(id) {
-  return (stats && id && typeof stats[id] === "number") ? stats[id] : 0;
-}
-
-function updateHint() {
-  if (!el.hint) return;
-  if (!currentId) {
-    el.hint.textContent = "화면을 누르면 다음 공식";
-    return;
-  }
-  const n = getCorrectCount(currentId);
-  const base = (stageView === "desc") ? "화면을 누르면 공식" : "화면을 누르면 다음 공식";
-  el.hint.innerHTML = `${base}<br><span class="hintSub">(${Math.min(n, AUTO_EXCLUDE_AFTER)}/${AUTO_EXCLUDE_AFTER})</span>`;
 }
 function newId() {
   return "f_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
@@ -248,11 +252,15 @@ function nextFromDeck() {
   if (deck.length === 0) return null;
 
   if (deckIndex >= deck.length) {
-    // 한 바퀴 끝 → 다시 셔플해서 새 바퀴
+    // 한 바퀴 끝 → 카운트 증가 후 주기적으로 감쇠
     deckCycles += 1;
-    if (deckCycles % DECAY_DECK_CYCLES === 0) {
-      decayCorrectCounts();
+    saveDeckCycles();
+
+    if (deckCycles % DECAY_EVERY_CYCLES === 0) {
+      decayCorrectCountsAndReinclude();
     }
+
+    // 새 바퀴 셔플
     rebuildDeck();
     if (deck.length === 0) return null;
   }
@@ -312,7 +320,6 @@ function showDesc(id) {
   el.filename.textContent = "";
   stageView = "desc";
 
-  updateHint();
   closeBothPanels();
 }
 
@@ -325,7 +332,6 @@ function showFormula(id) {
   el.filename.textContent = item.desc || "";
   stageView = "formula";
 
-  updateHint();
   closeBothPanels();
 }
 
@@ -337,7 +343,6 @@ function showRandomNext() {
     el.filename.textContent = "";
     currentId = null;
     stageView = "desc";
-  updateHint();
     return;
   }
 
@@ -356,12 +361,12 @@ function deleteFormula(id) {
   saveStore();
 
   excluded.delete(id);
+  autoExcluded.delete(id);
   saveExcluded();
+  saveAutoExcluded();
 
   if (currentId === id) currentId = null;
-  
-  delete stats[id];
-  saveStats();
+
   // 풀 변경 지점 → 덱 재구성
   rebuildDeck();
 
@@ -471,12 +476,36 @@ function renderGrids() {
   el.gridUnlearned.appendChild(fragU);
 
   el.gridExcluded.innerHTML = "";
-  const fragE = document.createDocumentFragment();
+
+  const autoIds = [];
+  const manualIds = [];
   for (const id of excluded) {
-    const item = byId(id);
-    if (item) fragE.appendChild(makeThumb(item, "include"));
+    if (autoExcluded.has(id)) autoIds.push(id);
+    else manualIds.push(id);
   }
-  el.gridExcluded.appendChild(fragE);
+
+  const makeSection = (title, ids) => {
+    const titleEl = document.createElement("div");
+    titleEl.className = "excludedSectionTitle";
+    titleEl.textContent = `${title} (${ids.length})`;
+
+    const box = document.createElement("div");
+    box.className = "excludedSectionList";
+
+    const frag = document.createDocumentFragment();
+    for (const id of ids) {
+      const item = byId(id);
+      if (item) frag.appendChild(makeThumb(item, "include"));
+    }
+    box.appendChild(frag);
+
+    el.gridExcluded.appendChild(titleEl);
+    el.gridExcluded.appendChild(box);
+  };
+
+  // 위: 자동 제외, 아래: 직접 제외
+  makeSection("제외된 공식들", autoIds);
+  makeSection("직접 제외한 공식들", manualIds);
 }
 
 // ===== 메뉴/모달 =====
@@ -506,8 +535,9 @@ function downloadBackup() {
     version: 1,
     formulas: FORMULAS,
     excluded: [...excluded],
-    stats,
     autoExcluded: [...autoExcluded],
+    deckCycles,
+    stats,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -536,11 +566,11 @@ async function restoreFromFile(file) {
   saveStore();
 
   excluded = new Set(Array.isArray(data.excluded) ? data.excluded.filter(x => typeof x === "string") : []);
-  saveExcluded();
-
   autoExcluded = new Set(Array.isArray(data.autoExcluded) ? data.autoExcluded.filter(x => typeof x === "string") : []);
-  autoExcluded = new Set([...autoExcluded].filter(id => excluded.has(id)));
+  deckCycles = Number.isFinite(Number(data.deckCycles)) ? Math.max(0, Math.floor(Number(data.deckCycles))) : 0;
+  saveExcluded();
   saveAutoExcluded();
+  saveDeckCycles();
 
   stats = (data && typeof data.stats === "object" && data.stats) ? data.stats : {};
   for (const k of Object.keys(stats)) {
@@ -616,7 +646,7 @@ el.btnExclude.addEventListener("click", (e) => {
   const n = incCorrect(currentId);
 
   if (n >= AUTO_EXCLUDE_AFTER) {
-    excludeNow(currentId, { auto: true }); // n번 이상이면 자동 제외
+    excludeNow(currentId, { manual: false }); // n번 이상이면 자동 제외
   } else {
     showRandomNext();      // 아직이면 다음으로만
   }
@@ -628,7 +658,7 @@ el.btnExclude.addEventListener("pointerdown", (e) => {
 
   excludeBtnTimer = setTimeout(() => {
     excludeBtnLongPressed = true;
-    excludeNow(currentId); // 길게 누르면 즉시 제외
+    excludeNow(currentId, { manual: true }); // 길게 누르면 즉시 제외(수동 제외)
   }, LONGPRESS_MS);
 });
 
@@ -725,9 +755,7 @@ function init() {
   const ids = new Set(FORMULAS.map(f => f.id));
 
   excluded = new Set([...excluded].filter(id => ids.has(id)));
-  autoExcluded = new Set([...autoExcluded].filter(id => ids.has(id)));
-  // 자동 제외는 excluded 안에 있어야 의미가 있으니 교집합으로 정리
-  autoExcluded = new Set([...autoExcluded].filter(id => excluded.has(id)));
+  autoExcluded = new Set([...autoExcluded].filter(id => ids.has(id) && excluded.has(id)));
   saveExcluded();
   saveAutoExcluded();
 
