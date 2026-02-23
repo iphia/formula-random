@@ -645,6 +645,7 @@ function init() {
   excluded = new Set([...excluded].filter(id => ids.has(id)));
   saveExcluded();
 
+  // stats 정리(없는 id 제거)
   for (const k of Object.keys(stats)) {
     if (!ids.has(k)) delete stats[k];
   }
