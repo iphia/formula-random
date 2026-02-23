@@ -1,13 +1,10 @@
 // ===== 저장 키 =====
 const STORE_KEY = "latex_formulas_store_v1";
 const EXCLUDE_KEY = "latex_formulas_excluded_v1";
+const DECK_STATE_KEY = "latex_formulas_deck_state_v1"; // 현재 덱 진행 저장
 
-const STATS_KEY = "latex_formulas_stats_v1";
-const AUTO_EXCLUDED_KEY = "latex_formulas_auto_excluded_v1";
-const DECK_CYCLES_KEY = "latex_formulas_deck_cycles_v1";
-
-const AUTO_EXCLUDE_AFTER = 5;
-const DECAY_EVERY_CYCLES = 5;
+const STATS_KEY = "latex_formulas_stats_v1"; // 맞춘 횟수 저장
+const AUTO_EXCLUDE_AFTER = 3;                // n번 이상 맞추면 자동 제외 (원하는 숫자로)
 
 // ===== DOM =====
 const el = {
@@ -18,8 +15,6 @@ const el = {
   btnExclude: document.getElementById("btnExclude"),
   btnUnlearned: document.getElementById("btnUnlearned"),
   btnExcluded: document.getElementById("btnExcluded"),
-
-  hint: document.querySelector(".hint"),
 
   panelUnlearned: document.getElementById("panelUnlearned"),
   panelExcluded: document.getElementById("panelExcluded"),
@@ -100,6 +95,53 @@ function saveExcluded() {
     localStorage.setItem(EXCLUDE_KEY, JSON.stringify([...excluded]));
   } catch {
     // 조용히 실패
+  }
+}
+function saveDeckState() {
+  try {
+    const payload = {
+      deck: Array.isArray(deck) ? deck : [],
+      deckIndex: Number.isFinite(deckIndex) ? deckIndex : 0,
+    };
+    localStorage.setItem(DECK_STATE_KEY, JSON.stringify(payload));
+  } catch {
+    // 조용히 실패
+  }
+}
+function clearDeckState() {
+  try {
+    localStorage.removeItem(DECK_STATE_KEY);
+  } catch {
+    // 조용히 실패
+  }
+}
+function restoreDeckStateIfValid() {
+  try {
+    const raw = localStorage.getItem(DECK_STATE_KEY);
+    if (!raw) return false;
+
+    const data = JSON.parse(raw);
+    if (!data || !Array.isArray(data.deck)) return false;
+
+    const savedDeck = data.deck.filter(x => typeof x === "string");
+    let savedIndex = Number(data.deckIndex);
+    if (!Number.isFinite(savedIndex)) savedIndex = 0;
+    savedIndex = Math.max(0, Math.floor(savedIndex));
+
+    const pool = availableFormulas().map(f => f.id);
+    const poolSet = new Set(pool);
+
+    if (savedDeck.length !== pool.length) return false;
+    if (new Set(savedDeck).size !== savedDeck.length) return false;
+    for (const id of savedDeck) {
+      if (!poolSet.has(id)) return false;
+    }
+
+    deck = savedDeck;
+    deckIndex = Math.min(savedIndex, deck.length);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -234,6 +276,28 @@ function setCounts() {
   el.unlearnedCount.textContent = String(availableFormulas().length);
   el.excludedCount.textContent = String(excluded.size);
 }
+function ensureDeckProgressBar() {
+  if (!el.stage || document.getElementById("deckProgressWrap")) return;
+
+  const wrap = document.createElement("div");
+  wrap.id = "deckProgressWrap";
+  const fill = document.createElement("div");
+  fill.id = "deckProgressFill";
+
+  wrap.appendChild(fill);
+  el.stage.appendChild(wrap);
+}
+
+function updateDeckProgressBar() {
+  const fill = document.getElementById("deckProgressFill");
+  if (!fill) return;
+
+  let ratio = 0;
+  if (deck.length > 0) ratio = deckIndex / deck.length;
+  ratio = Math.max(0, Math.min(1, ratio));
+
+  fill.style.width = `${ratio * 100}%`;
+}
 
 // ===== 덱 =====
 function rebuildDeck() {
@@ -242,6 +306,8 @@ function rebuildDeck() {
   if (pool.length === 0) {
     deck = [];
     deckIndex = 0;
+    clearDeckState();
+    updateDeckProgressBar();
     return;
   }
 
@@ -252,27 +318,24 @@ function rebuildDeck() {
   if (deck.length >= 2 && deck[0] === currentId) {
     [deck[0], deck[1]] = [deck[1], deck[0]];
   }
+
+  saveDeckState();
+  updateDeckProgressBar();
 }
 
 function nextFromDeck() {
   if (deck.length === 0) return null;
 
   if (deckIndex >= deck.length) {
-    // 한 바퀴 끝 → 카운트 증가 후 주기적으로 감쇠
-    deckCycles += 1;
-    saveDeckCycles();
-
-    if (deckCycles % DECAY_EVERY_CYCLES === 0) {
-      decayCorrectCountsAndReinclude();
-    }
-
-    // 새 바퀴 셔플
+    // 한 바퀴 끝 → 다시 셔플해서 새 바퀴
     rebuildDeck();
     if (deck.length === 0) return null;
   }
 
   const id = deck[deckIndex];
   deckIndex += 1;
+  saveDeckState();
+  updateDeckProgressBar();
   return id;
 }
 
@@ -326,8 +389,6 @@ function showDesc(id) {
   el.filename.textContent = "";
   stageView = "desc";
 
-  stageView = "desc";
-  updateHint();
   closeBothPanels();
 }
 
@@ -340,27 +401,7 @@ function showFormula(id) {
   el.filename.textContent = item.desc || "";
   stageView = "formula";
 
-  stageView = "formula";
-  updateHint();
   closeBothPanels();
-}
-
-function updateHint() {
-  if (!el.hint) return;
-
-  // 현재 카드 맞춘 횟수
-  const n = currentId ? (Number(stats[currentId]) || 0) : 0;
-
-  // 상태에 따라 문구 변경
-  const mainText = (currentId && stageView === "desc")
-    ? "화면을 누르면 공식"
-    : "화면을 누르면 다음 공식";
-
-  // hint 내부에 서브줄 생성/업데이트
-  el.hint.innerHTML = `
-    ${mainText}
-    <span class="hintSub">(${n}/${AUTO_EXCLUDE_AFTER})</span>
-  `;
 }
 
 function showRandomNext() {
@@ -371,7 +412,6 @@ function showRandomNext() {
     el.filename.textContent = "";
     currentId = null;
     stageView = "desc";
-    updateHint();
     return;
   }
 
@@ -673,7 +713,7 @@ el.btnExclude.addEventListener("click", (e) => {
   if (!currentId) return;
 
   const n = incCorrect(currentId);
-  
+
   if (n >= AUTO_EXCLUDE_AFTER) {
     excludeNow(currentId, { manual: false }); // n번 이상이면 자동 제외
   } else {
@@ -798,7 +838,14 @@ function init() {
 
   setCounts();
   renderGrids();
-  rebuildDeck();
+
+  ensureDeckProgressBar();
+  if (!restoreDeckStateIfValid()) {
+    rebuildDeck();
+  } else {
+    updateDeckProgressBar();
+  }
+
   showRandomNext();
 }
 
