@@ -1,4 +1,6 @@
-// ===== 저장 키 =====
+// =========================
+// 저장 키 (localStorage)
+// =========================
 const STORE_KEY = "latex_formulas_store_v1";
 const EXCLUDE_KEY = "latex_formulas_excluded_v1";
 const DECK_STATE_KEY = "latex_formulas_deck_state_v1"; // 현재 덱 진행 저장
@@ -13,7 +15,9 @@ const MEMORY_META_KEY = "latex_formulas_memory_meta_v1"; // 개별 감쇠 기준
 
 const STAGE_STATE_KEY = "latex_formulas_stage_state_v1"; // 현재 보고 있던 카드/화면 상태
 
-// ===== DOM =====
+// =========================
+// DOM 캐시
+// =========================
 const el = {
   stage: document.getElementById("stage"),
   formulaBox: document.getElementById("formulaBox"),
@@ -51,7 +55,9 @@ const el = {
   panelFooter: document.getElementById("panelFooter"),
 };
 
-// ===== 상태 =====
+// =========================
+// 런타임 상태
+// =========================
 let FORMULAS = loadStore();        // [{id, desc, tex}]
 let FORMULA_MAP = new Map();       // id -> formula (O(1))
 let excluded = loadExcluded();     // Set(ids)
@@ -66,7 +72,9 @@ let stageView = "desc";
 let deck = [];      // 현재 한 바퀴 덱(아이디 배열)
 let deckIndex = 0;  // 다음에 보여줄 위치
 
-// ===== 저장/로드 =====
+// =========================
+// 저장 / 로드 유틸
+// =========================
 function loadStore() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
@@ -395,7 +403,9 @@ function updateAnswerButtonVisibility() {
   // el.btnExclude.style.display = (stageView === "formula") ? "" : "none";
 }
 
-// ===== 맵 캐시 =====
+// =========================
+// 맵 캐시 (id → formula)
+// =========================
 function rebuildMap() {
   FORMULA_MAP = new Map(FORMULAS.map(f => [f.id, f]));
 }
@@ -403,7 +413,9 @@ function byId(id) {
   return FORMULA_MAP.get(id) || null;
 }
 
-// ===== 유틸 =====
+// =========================
+// 공통 유틸
+// =========================
 function shuffleInPlace(a) {
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -445,7 +457,9 @@ function updateDeckProgressBar() {
 }
 
 
-// ===== 덱 =====
+// =========================
+// 덱 로직 (한 바퀴 랜덤 순회)
+// =========================
 function rebuildDeck() {
   const pool = availableFormulas().map(f => f.id);
 
@@ -494,7 +508,9 @@ function nextFromDeck() {
   return id;
 }
 
-// ===== KaTeX 렌더 =====
+// =========================
+// KaTeX 렌더링
+// =========================
 function renderKatexInto(node, tex, { displayMode = true } = {}) {
   node.textContent = "";
   if (!window.katex) { node.textContent = tex; return; }
@@ -509,7 +525,9 @@ function renderKatexInto(node, tex, { displayMode = true } = {}) {
   }
 }
 
-// ===== 패널 =====
+// =========================
+// 좌/우 패널 열기/닫기
+// =========================
 function openPanel(which) {
   if (which === "left") {
     el.panelUnlearned.classList.add("open", "left");
@@ -549,7 +567,9 @@ function updateHint() {
   `;
 }
 
-// ===== 표시 =====
+// =========================
+// 스테이지 표시 (설명/공식)
+// =========================
 function showDesc(id) {
   const item = byId(id);
   if (!item) return;
@@ -598,7 +618,9 @@ function showRandomNext() {
   showDesc(id);
 }
 
-// ===== 삭제 =====
+// =========================
+// 삭제 로직
+// =========================
 function deleteFormula(id) {
   const idx = FORMULAS.findIndex(f => f.id === id);
   if (idx === -1) return;
@@ -631,7 +653,9 @@ function confirmDelete(item) {
   deleteFormula(item.id);
 }
 
-// ===== 그리드 =====
+// =========================
+// 패널 썸네일 그리드 렌더링
+// =========================
 function makeThumb(item, mode) {
   const wrap = document.createElement("div");
   wrap.className = "thumb";
@@ -650,10 +674,11 @@ function makeThumb(item, mode) {
 
   const action = () => {
     if (mode === "view") {
+      // 미암기 패널: 해당 카드를 스테이지에 띄움
       showDesc(item.id);
-    // makeThumb(item, mode) 내부 action()
-} else {
-  // 제외 해제(직접 다시 넣기)
+    } else {
+      // 제외 패널: 다시 학습 대상에 포함
+      // (수동 재포함으로 간주하여 자동제외 메타도 함께 정리)
   excluded.delete(item.id);
   autoExcluded.delete(item.id); // 수동 재포함이면 자동제외 상태도 같이 해제해두는 게 깔끔함
   if (memoryMeta[item.id]) delete memoryMeta[item.id];
@@ -772,7 +797,9 @@ function renderGrids() {
   makeSection("직접 제외한 공식들", manualIds);
 }
 
-// ===== 메뉴/모달 =====
+// =========================
+// 메뉴 / 모달
+// =========================
 function openSheet() {
   el.sheet.classList.add("open");
   el.sheet.setAttribute("aria-hidden", "false");
@@ -793,7 +820,9 @@ function closeModal() {
   el.modal.setAttribute("aria-hidden", "true");
 }
 
-// ===== 백업/복원 =====
+// =========================
+// 백업 / 복원
+// =========================
 function downloadBackup() {
   const payload = {
     version: 1,
@@ -860,19 +889,57 @@ async function restoreFromFile(file) {
   init();
 }
 
-// ===== 이벤트 =====
-function isClickOnUI(target) {
-  return (
-    target.closest("#topbar") ||
-    target.closest(".panel") ||
-    target.closest(".thumb") ||
-    target.closest(".closeBtn") ||
-    target.closest(".fab") ||
-    target.closest(".sheet") ||
-    target.closest(".modal")
+// =========================
+// 이벤트 바인딩
+// =========================
+// 패널 바깥 영역 탭 시 현재 열린 패널 닫기
+// - capture 단계에서 먼저 처리해서 같은 탭이 스테이지로 전달되는 것 방지
+// - 패널 내부 / 패널 여는 버튼 / 패널 닫기 버튼 탭은 무시
+function closeOpenPanels() {
+  let closed = false;
+
+  if (el.panelUnlearned?.classList.contains("open")) {
+    closePanel("left");
+    closed = true;
+  }
+  if (el.panelExcluded?.classList.contains("open")) {
+    closePanel("right");
+    closed = true;
+  }
+
+  return closed;
+}
+
+function isInsidePanelUi(target) {
+  if (!target || !target.closest) return false;
+
+  return !!(
+    target.closest("#panelUnlearned") ||
+    target.closest("#panelExcluded") ||
+    target.closest("#btnUnlearned") ||
+    target.closest("#btnExcluded")
   );
 }
 
+document.addEventListener("pointerdown", (e) => {
+  // 패널이 안 열려 있으면 아무 것도 안 함
+  if (!isAnyPanelOpen()) return;
+
+  // 패널 내부/패널 관련 버튼 탭이면 닫지 않음
+  if (isInsidePanelUi(e.target)) return;
+
+  // 바깥 영역 탭이면 패널 닫기
+  const closed = closeOpenPanels();
+
+  if (closed) {
+    // 같은 터치로 스테이지 next/showFormula가 실행되지 않게 차단
+    stagePointerActive = false;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}, { capture: true, passive: false });
+// 패널이 열려 있는 동안에는 스테이지 탭(다음 카드/공식 전환)을 막는다.
+// CSS z-index/터치 버블링 환경 차이와 무관하게 "로직 레벨"에서 최종 차단.
 function isAnyPanelOpen() {
   return (
     el.panelUnlearned?.classList.contains("open") ||
@@ -880,13 +947,15 @@ function isAnyPanelOpen() {
   );
 }
 
-////////
+// 스테이지 탭/터치 처리 상태 (짧은 탭만 인정)
+// pointerdown → pointerup 사이를 하나의 "탭 후보"로 추적한다.
+// 손가락/마우스가 일정 거리 이상 움직이면 탭이 아닌 드래그/스크롤로 보고 무시.
 let stagePointerActive = false;
 let stageStartX = 0;
 let stageStartY = 0;
 
 el.stage.addEventListener("pointerdown", (e) => {
-  // ✅ 패널 열려있으면 스테이지 탭 처리 자체를 시작하지 않음
+  // 패널 열림 상태면 탭 판정 시작 자체를 중단
   if (isAnyPanelOpen()) {
     stagePointerActive = false;
     return;
@@ -901,7 +970,7 @@ el.stage.addEventListener("pointerdown", (e) => {
 }, { passive: false });
 
 el.stage.addEventListener("pointerup", (e) => {
-  // ✅ 패널 열려있으면 다음/공식 전환 막기
+  // 패널 열림 상태면 pointerup에서도 화면 전환 금지
   if (isAnyPanelOpen()) {
     stagePointerActive = false;
     return;
@@ -1030,7 +1099,9 @@ el.btnSave.addEventListener("click", () => {
 el.btnCancel.addEventListener("click", closeModal);
 el.modal.addEventListener("click", (e) => { if (e.target === el.modal) closeModal(); });
 
-// ===== 초기 샘플 =====
+// =========================
+// 초기 샘플 데이터
+// =========================
 function ensureSeed() {
   if (FORMULAS.length > 0) return;
   FORMULAS = [
@@ -1041,7 +1112,9 @@ function ensureSeed() {
   saveStore();
 }
 
-// ===== init =====
+// =========================
+// 초기화
+// =========================
 function init() {
   ensureSeed();
 
