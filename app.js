@@ -872,33 +872,49 @@ function isClickOnUI(target) {
     target.closest(".modal")
   );
 }
+
+function isAnyPanelOpen() {
+  return (
+    el.panelUnlearned?.classList.contains("open") ||
+    el.panelExcluded?.classList.contains("open")
+  );
+}
+
 ////////
 let stagePointerActive = false;
 let stageStartX = 0;
 let stageStartY = 0;
 
 el.stage.addEventListener("pointerdown", (e) => {
-  // 왼쪽/오른쪽 패널 영역에서 시작한 터치는 무시 (기존 로직 있으면 유지)
+  // ✅ 패널 열려있으면 스테이지 탭 처리 자체를 시작하지 않음
+  if (isAnyPanelOpen()) {
+    stagePointerActive = false;
+    return;
+  }
+
   stagePointerActive = true;
   stageStartX = e.clientX;
   stageStartY = e.clientY;
 
-  // iOS에서 길게 누르다 떼는 동작 안정화에 도움
   try { el.stage.setPointerCapture(e.pointerId); } catch (_) {}
-
   e.preventDefault();
 }, { passive: false });
 
 el.stage.addEventListener("pointerup", (e) => {
+  // ✅ 패널 열려있으면 다음/공식 전환 막기
+  if (isAnyPanelOpen()) {
+    stagePointerActive = false;
+    return;
+  }
+
   if (!stagePointerActive) return;
   stagePointerActive = false;
 
   const dx = e.clientX - stageStartX;
   const dy = e.clientY - stageStartY;
-  const moved = Math.hypot(dx, dy) > 12; // 12px 이상 움직였으면 탭으로 안 봄
+  const moved = Math.hypot(dx, dy) > 12;
   if (moved) return;
 
-  // ✅ 여기서 “설명→공식→다음” 동작 실행
   if (currentId && stageView === "desc") {
     showFormula(currentId);
   } else {
